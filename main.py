@@ -2,9 +2,14 @@ import colorama
 import os
 import sys
 import subprocess
+from typing import Optional
 
 GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
 RUN_CMD_DEBUG = True
+
+def todo():
+    print("AHAHA YOU DIDN'T IMPLEMENT THIS")
+    sys.exit(69)
 
 def debug_proc(proc: subprocess.CompletedProcess):
     code = proc.returncode
@@ -41,6 +46,9 @@ class GitUtils:
         commit_hash = run_cmd(['git', 'commit-tree', '-m', message, *[x for parent in parents for x in ['-p', parent]], f'{tree}^{{tree}}']).stdout
         run_cmd(['git', 'merge', '--ff-only', commit_hash])
 
+    def fix_name(self, name: str) -> str:
+        return '-'.join(name.strip().split(' '))
+
 class App(GitUtils):
     def show_day(self, date="today"):
         branch_name = self.get_date(date)
@@ -73,11 +81,26 @@ class App(GitUtils):
         self.merge_theirs(agenda_start, [*parents, 'main'], f'End of {today} agenda')
         run_cmd_(f'git switch {today}')
         run_cmd_('git reset main')
+
+    def add_task_kind(self, task: str, parent: Optional[str] = None):
+        task = self.fix_name(task)
+        parent = parent or "tasks"
+        parent = self.fix_name(parent)
+        run_cmd_(f'git branch {task} {parent}')
+        run_cmd_(f'git switch {task}')
+        run_cmd('git commit --allow-empty -m'.split() + [f"Setup for {task}"])
+
+    def mark_task_todo(self, task: str):
+        todo()
+        
         
         
 
 os.chdir(GITODO_DIRECTORY)
 app = App()
 #app.end_day()
-#app.add_task_today('eat')
-app.add_task_today(sys.argv[1])
+#app.add_task_today('adding-task-kind')
+#app.add_task_today(sys.argv[1])
+#app.add_task_kind('marking task as done', 'gitodo')
+#app.add_task_kind(sys.argv[1], sys.argv[2])
+app.mark_task_todo("a")

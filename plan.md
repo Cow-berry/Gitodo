@@ -1,9 +1,14 @@
 Current plan:
 - adding kinds of tasks
 - marking tasks done
+  - have a notion of a one-time task, completing which does't let you add them again
+  -- also also ARCHIVE THEM so the names are available again (or/and fix subtasks)
+  - mark start of day as done when creating the agenda
 - displaying current tasks with done marks
 - browse all/topic tasks and mass-add them 
 - switch to a current task (switch main, switch main back to end when needed)
+- make internal branches obscurely-names to not interfere with user input
+- do something with subtasks
 - polish the app
   - check the current agenda exists
   - check the task exists
