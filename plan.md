@@ -1,4 +1,8 @@
 Current plan:
+- in the output always enumerate the tasks so later you cn index them instead of saying the name
+- actual command line interface
+- think through the actual usage
+
 - adding kinds of tasks
 - marking tasks done
   - have a notion of a one-time task, completing which does't let you add them again

@@ -108,7 +108,19 @@ class Git(GitPrivate):
         
         parents = [x for parent in parents for x in ['-p', parent]]
         commit_hash = run_cmd(['git', 'commit-tree', '-m', message, *parents, f'{tree}^{{tree}}']).stdout
-        run_cmd(['git', 'merge', '--ff-only', commit_hash]) 
+        run_cmd(['git', 'merge', '--ff-only', commit_hash])
+
+    def get_children(self, parent: str):
+        parent = self.show(parent, pretty="%H")
+        families = run_cmd_("git rev-list --all --parents").stdout.split('\n')
+        children = []
+        for family in families:
+            child, *parents = family.split(' ')
+            if parent in parents:
+                children.append(child)
+        return children
+            
+        
         
         
 
@@ -162,22 +174,39 @@ class App(GitUtils):
         git.switch(today)
         git.reset('main')
     
-    def add_task_kind(self, task: str, parent: Optional[str] = None):
-        parent = parent or "tasks"
-
+    def add_task_kind(self, task: str, parent: str = 'tasks'):
+        if not task.startswith('|'):
+            task = f'{parent}.{task}'
+        
         git.branch(task, parent)
         git.switch(task)
         git.commit(f'Setup for {task}')
+
+    def add_task_kind_step(self, step: str, parent: str):
+        self.add_task_kind('||'+step, parent)
 
     def mark_task_todo(self, task: str):
         task_hash = git.log(task, 'main').split('\n')[-1]
         git.switch('done')
         git.merge_pick('done', ['done', task_hash], f'DONE: {task}')
+
+    def browse(self, parent: str = 'tasks'):
+        children = git.get_children(parent)
+        for i, child in enumerate(children):
+            print(f"{i}: {child}")
+
+    
         
 @run_except
 def main() -> None:
+    
+    if sys.argv[1:3] == ['lock', 'in']:
+        os.chdir('/home/cowberry/Projects/Gitodo')
+        subprocess.Popen(['emacs',  '&'])
+    
     os.chdir(GITODO_DIRECTORY)
     app = App()
+    app.browse()
     # app.end_day()
     # app.add_task_today('drink')
     # app.add_task_today(sys.argv[1])
