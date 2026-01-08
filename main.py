@@ -1,3 +1,4 @@
+import argparse
 import colorama
 import os
 import sys
@@ -191,22 +192,76 @@ class App(GitUtils):
         git.merge_pick('done', ['done', task_hash], f'DONE: {task}')
 
     def browse(self, parent: str = 'tasks'):
+        git.switch('last-parent')
+        git.reset(parent)
         children = git.get_children(parent)
         for i, child in enumerate(children):
+            child = self.get_branches(child)[0]
             print(f"{i}: {child}")
 
+class Command:
+    command = ""
+    help = ""
     
+    def __init__(self) -> None:
+        pass
         
-@run_except
-def main() -> None:
+    def run(self) -> None:
+        pass
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        pass
+        
+        
+
+class AddCommand(Command):
+    command = "add"
+    help = "Add a task to the general pull"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("name")
+        parser.add_argument("--immediate", "-i", action="store_true", help = "Immediately add to current agenda")
+
+class ShowCommand(Command):
+    command = "show"
+    help = "Show current agenda"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--date")
     
+            
+
+def maybe_lock_in() -> None | NoReturn:
     if sys.argv[1:3] == ['lock', 'in']:
         os.chdir('/home/cowberry/Projects/Gitodo')
-        subprocess.Popen(['emacs',  '&'])
+        subprocess.Popen(['emacs'])
+        print("Locked In Successfully")
+        exit(0)
+
+def setup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog='Gitodo')
+    sub_parsers = parser.add_subparsers()
+    for cls in Command.__subclasses__():
+        cls_parser = sub_parsers.add_parser(cls.command, help=cls.help)
+        cls.setup_parser(cls_parser)
     
+    return parser
+    
+    
+@run_except
+def main() -> None:
+    maybe_lock_in()
+   
     os.chdir(GITODO_DIRECTORY)
     app = App()
-    app.browse()
+    
+    parser = setup_parser()
+    args = parser.parse_args(sys.argv[1:])
+    print(f"{args = }")
+    # app.browse()
     # app.end_day()
     # app.add_task_today('drink')
     # app.add_task_today(sys.argv[1])
@@ -215,5 +270,5 @@ def main() -> None:
     # app.mark_task_todo("drink")
     # app.show_day()
     # run_cmd_('git log 270qbbde..done --ancestry-path')
-
-main()
+if __name__ == "__main__":
+    main()
