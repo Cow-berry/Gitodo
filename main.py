@@ -6,6 +6,7 @@ import subprocess
 from typing import Optional, Callable
 
 GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
+# RUN_CMD_DEBUG = False
 RUN_CMD_DEBUG = True
 
 def todo():
@@ -18,7 +19,7 @@ def debug_proc(proc: subprocess.CompletedProcess):
     line_lengh = os.get_terminal_size().columns
     print(f"{code_msg}:".ljust(line_lengh, '-'))
     print(f"cmd: '{' '.join(proc.args)}'")
-    print(f"stdout: {proc.stdout}")
+    print(f"stdout: '{proc.stdout}'")
     #print(f"stderr: {proc.stderr}")
     print('-'*line_lengh)
     return proc
@@ -83,7 +84,6 @@ class Git(GitPrivate):
 
         return run_cmd(['git', 'show', *flags, node]).stdout
 
-    @run_except
     def branch(self, child: str, parent: str) -> None:
         child = self._fix_name(child)
         parent = self._fix_name(parent)
@@ -121,6 +121,14 @@ class Git(GitPrivate):
                 children.append(child)
         return children
             
+    def get_branches(self, commit_hash: str) -> list[str]:
+        return run_cmd(['git', 'branch', '--points-at', commit_hash, '--format=%(refname:lstrip=2)']).stdout.split('\n')
+        # return run_cmd(['git', 'name-rev', commit_hash]).stdout.split()[1:]
+
+
+
+    def check_belongs(self, child: str, parent: str):
+        return run_cmd_(f'git log {child}..{parent} --ancestry-path').stdout != ''
         
         
         
@@ -133,13 +141,6 @@ class GitUtils:
     def get_date(self, date: str="today") -> str:
         return run_cmd(['date', '--date', date, '+"%x"']).stdout.strip()[1:-1]
 
-    def get_branches(self, commit_hash: str) -> list[str]:
-        return run_cmd(['git', 'name-rev', commit_hash]).stdout.split()[1:]
-
-
-
-    def check_belongs(self, child: str, parent: str):
-        return run_cmd_(f'git log {child}..{parent} --ancestry-path').stdout != ''
 
 class App(GitUtils):
     def show_day(self, date="today"):
@@ -199,38 +200,75 @@ class App(GitUtils):
             child = self.get_branches(child)[0]
             print(f"{i}: {child}")
 
+app = App()
+            
 class Command:
     command = ""
     help = ""
     
-    def __init__(self) -> None:
-        pass
-        
-    def run(self) -> None:
-        pass
-
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         pass
-        
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        pass
         
 
 class AddCommand(Command):
-    command = "add"
+    command = ["add", 'a']
     help = "Add a task to the general pull"
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("name")
-        parser.add_argument("--immediate", "-i", action="store_true", help = "Immediately add to current agenda")
+        
+        kind = parser.add_mutually_exclusive_group(required=True)
+        for name in ['category', 'project', 'step']:
+            kind.add_argument(f'-{name[0]}', f"--{name}", dest='kind', action='store_const', const=name, help=f"Add a {name}")
 
-class ShowCommand(Command):
-    command = "show"
-    help = "Show current agenda"
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        git.switch('last-parent')
+        
+        name = git.get_branches('last-parent')[1]
+        if args.kind == "category":
+            name = f"{name}.{args.name}"
+        elif args.kind == "project":
+            name = f"{name}.{args.name}|"
+        elif args.kind == "step":
+            name = f"{name}|{args.name}"
+
+        git.branch(name, 'last-parent')
+        git.switch(name)
+        git.commit(f'{args.kind.capitalize()}: {args.name}')
+        if args.kind != "step":
+            git.switch('last-parent')
+            git.reset(name)
+        
+
+class BrowseCommand(Command):
+    command = ["browse", 'b']
+    help = "Browse the pull of projects"
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("--date")
+        choices = list(range(len(git.get_children('last-parent'))))
+        parser.add_argument("-c", "--choice", dest="choice", type=int, required=False, choices=choices)
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        git.switch('last-parent')
+
+        branch = 'last-parent'
+        if args.choice is not None:
+            branch = git.get_children('last-parent')[args.choice]
+            git.reset(branch)
+
+        for i, child in enumerate(git.get_children(branch)):
+            name = git.get_branches(child)[0]
+            print(f"{i}: {name}")
+        
     
             
 
@@ -243,9 +281,9 @@ def maybe_lock_in() -> None | NoReturn:
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='Gitodo')
-    sub_parsers = parser.add_subparsers()
+    sub_parsers = parser.add_subparsers(dest='command')
     for cls in Command.__subclasses__():
-        cls_parser = sub_parsers.add_parser(cls.command, help=cls.help)
+        cls_parser = sub_parsers.add_parser(cls.command[0], help=cls.help, aliases=cls.command[1:])
         cls.setup_parser(cls_parser)
     
     return parser
@@ -256,11 +294,13 @@ def main() -> None:
     maybe_lock_in()
    
     os.chdir(GITODO_DIRECTORY)
-    app = App()
     
     parser = setup_parser()
     args = parser.parse_args(sys.argv[1:])
     print(f"{args = }")
+    cmd_cls: Command = [cls for cls in Command.__subclasses__() if args.command in cls.command][0]
+    print(f"{cmd_cls = }")
+    cmd_cls.run(args)
     # app.browse()
     # app.end_day()
     # app.add_task_today('drink')
