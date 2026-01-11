@@ -1,16 +1,11 @@
 import api
 import cmd
 
-
-
 import colorama
 import os
 import sys
 import subprocess
 from typing import Optional, Callable
-
-
-GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
             
 
 def maybe_lock_in() -> None | NoReturn:
@@ -23,8 +18,6 @@ def maybe_lock_in() -> None | NoReturn:
 @cmd.run_except
 def main() -> None:
     maybe_lock_in()
-   
-    os.chdir(GITODO_DIRECTORY)
     
     parser = api.setup_parser()
     args = parser.parse_args(sys.argv[1:])

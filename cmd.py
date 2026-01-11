@@ -1,8 +1,11 @@
 import subprocess
 import os
 
-# RUN_CMD_DEBUG = False
-RUN_CMD_DEBUG = True
+RUN_CMD_DEBUG = False
+# RUN_CMD_DEBUG = True
+
+GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
+os.chdir(GITODO_DIRECTORY)
 
 def debug_proc(proc: subprocess.CompletedProcess):
     code = proc.returncode
@@ -11,7 +14,7 @@ def debug_proc(proc: subprocess.CompletedProcess):
     print(f"{code_msg}:".ljust(line_lengh, '-'))
     print(f"cmd: '{' '.join(proc.args)}'")
     print(f"stdout: '{proc.stdout}'")
-    #print(f"stderr: {proc.stderr}")
+    print(f"stderr: {proc.stderr}")
     print('-'*line_lengh)
     return proc
 

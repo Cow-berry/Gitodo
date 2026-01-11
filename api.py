@@ -1,5 +1,8 @@
+import git
+import task
+
 import argparse
-from git import git
+
 
 def get_date(date: str="today") -> str:
     return run_cmd(['date', '--date', date, '+"%x"']).stdout.strip()[1:-1]
@@ -25,6 +28,7 @@ class AddCommand(Command):
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("name")
+        parser.add_argument("-i", "--index", dest='parent', type=int, help="Specify the parent")
         
         kind = parser.add_mutually_exclusive_group(required=True)
         for name in ['category', 'project', 'step']:
@@ -32,19 +36,20 @@ class AddCommand(Command):
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        git.switch('last-parent')
-        
-        name = git.get_branches('last-parent')[1]
+        parent = task.index_through(args.parent) if args.parent is not None else 'last-parent'
+        names: list[str] = git.get_branches(parent)
+        names = [name for name in names if name != "last-parent"]
+        name = names[0]
         if args.kind == "category":
             name = f"{name}.{args.name}"
         elif args.kind == "project":
             name = f"{name}.{args.name}|"
         elif args.kind == "step":
-            name = f"{name}|{args.name}"
+            name = f"{name}||{args.name}"
 
-        git.branch(name, 'last-parent')
+        git.branch(name, parent)
         git.switch(name)
-        git.commit(f'{args.kind.capitalize()}: {args.name}')
+        git.commit(f'{args.name}')
         if args.kind != "step":
             git.switch('last-parent')
             git.reset(name)
@@ -58,14 +63,13 @@ class BrowseCommand(Command):
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--all", dest='all', action="store_true", required=False)
 
-    @staticmethod
-    def traverse_tasks() -> list[tuple[str, str]]:
-        pass
-        
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         git.switch('main')
         git.reset('tasks')
+        hash = git.show('main', pretty='%H')
+        res: Task = task.traverse_hash(hash)
+        print(res)
         
 
         
