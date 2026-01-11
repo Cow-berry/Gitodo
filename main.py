@@ -137,10 +137,12 @@ class Git(GitPrivate):
 git = Git()
 
 
-class GitUtils:
-    def get_date(self, date: str="today") -> str:
-        return run_cmd(['date', '--date', date, '+"%x"']).stdout.strip()[1:-1]
+def get_date(date: str="today") -> str:
+    return run_cmd(['date', '--date', date, '+"%x"']).stdout.strip()[1:-1]
 
+
+class GitUtils:
+    pass
 
 class App(GitUtils):
     def show_day(self, date="today"):
@@ -268,8 +270,41 @@ class BrowseCommand(Command):
         for i, child in enumerate(git.get_children(branch)):
             name = git.get_branches(child)[0]
             print(f"{i}: {name}")
-        
-    
+
+class BeginCommand(Command):
+    command = ["begin"]
+    help = "reset the curretn day"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        pass
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        today = get_date()
+        main_day = (git.get_branches('main') + [None])[0]
+        if today == main_day:
+            print(f"Already on day {today}")
+            return
+
+        git.branch(today, 'days')
+        git.switch(today)
+        git.commit(f'Agenda start: {today}')
+        git.commit(f'Agenda end: {today}')
+        git.switch('main')
+        git.reset(today)
+
+
+class PickCommand(Command):
+    command = ["pick"]
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        pass
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        pass
             
 
 def maybe_lock_in() -> None | NoReturn:

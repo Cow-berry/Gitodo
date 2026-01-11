@@ -1,3 +1,30 @@
+# gd begin:
+	creates a new day setup
+
+# gd pick (num/name):
+	adds a task to current agenda
+	
+# gd unpick (num/name):
+	unpicks a task from current agenda
+
+# gd browse all:
+	shows _all_ tasks in a numbered list
+
+# gd browse (-r) [(num/name)]+:
+	shows (recursively) all tassks parented at the nodes
+	
+
+
+# gd tag --add <name> (num/name):
+	adda tag, and remerges the task into a octopus commit
+
+## Maybe:
+# undo:
+	lists the list of last actions (paginated)
+
+# undo (num):
+	undoes the action (of possible)
+
 Current plan:
 - in the output always enumerate the tasks so later you cn index them instead of saying the name
 - actual command line interface
