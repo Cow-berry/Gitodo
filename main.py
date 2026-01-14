@@ -29,3 +29,4 @@ def main() -> None:
     
 if __name__ == "__main__":
     main()
+    os.chdir(cmd.GITODO_DIRECTORY)

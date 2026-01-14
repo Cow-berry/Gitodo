@@ -38,16 +38,19 @@ def run_except(function: Callable):
     return inner
 
 
-def run_cmd(cmd: list[str], debug=False) -> subprocess.CompletedProcess:
+def run_cmd(cmd: list[str], debug=False, exception=True) -> subprocess.CompletedProcess:
     debug = debug or RUN_CMD_DEBUG
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc.stdout = proc.stdout.decode('utf-8').strip()
     proc.stderr = proc.stderr.decode('utf-8').strip()
     if debug:
         debug_proc(proc)
-    if proc.returncode != 0:
+    if proc.returncode != 0 and exception:
         raise RunFailureException(proc)
     return proc
+
+def run_cmd_if(cmd: list[str], debug=False) -> bool:
+    return run_cmd(cmd, debug).returncode == 0
 
 def run_cmd_(cmd: str, *args,  **kwargs) -> subprocess.CompletedProcess:
     return run_cmd(cmd.split(), *args, **kwargs)

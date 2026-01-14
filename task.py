@@ -33,8 +33,11 @@ class Task:
     def flatten(self) -> list[Task]:
         return [self] + [flattened for child in self.children for flattened in child.flatten()]
 
+    def to_str(self) -> str:
+        return f"{self.color}{self.title}:{s.RESET_ALL} {self.subject}"
+
     def __str__(self) -> str:
-        print(f"{self.subject} -> {','.join(x.subject for x in self.children)}")
+        # print(f"{self.subject} -> {','.join(x.subject for x in self.children)}")
         
         current = ''
         if 'last-parent' in git.get_branches(self.hash):
@@ -56,7 +59,7 @@ class Task:
 
 
 class Step(Task):
-    title = "Task"
+    title = "Step"
     color = f.LIGHTCYAN_EX
 
     
@@ -102,3 +105,12 @@ def index_through(i: int) -> str:
 
 def index(hash: str, i: int) -> str:
     return traverse_hash(hash).children[i].hash
+
+def get_tasks(day: str = 'today') -> list[str]:
+    agenda_start = git.log('days', day).split('\n')[-1]
+    return [git.get_parents(parent, exclude=[agenda_start])[0] for parent in git.get_parents(day, exclude=[agenda_start])]
+
+def get_picks(day: str = 'today') -> list[str]:
+    agenda_start = git.log('days', day).split('\n')[-1]
+    return git.get_parents(day, exclude=[agenda_start])
+
