@@ -1,4 +1,5 @@
 import git
+import cmd
 
 from colorama import Fore as f
 from colorama import Style as s
@@ -84,9 +85,9 @@ def traverse_hash(hash: str) -> Task:
     branch = git.get_branches(hash)[-1]
 
     cls = Task
-    if branch.endswith('|'):
+    if branch.endswith('--project'):
         cls = Project
-    elif '|' in branch:
+    elif branch.endswith('--step'):
         cls = Step
         return cls(hash)
     else:
@@ -97,8 +98,9 @@ def traverse_hash(hash: str) -> Task:
     res.number_through()
     return res
 
-numbered_through: list[Task] = traverse_hash('tasks').number_through().flatten()
-numbered_through.sort(key=lambda task: task.number)
+if cmd.INSTALLED:
+    numbered_through: list[Task] = traverse_hash('tasks').number_through().flatten()
+    numbered_through.sort(key=lambda task: task.number)
 
 def index_through(i: int) -> str:
     return numbered_through[i].hash

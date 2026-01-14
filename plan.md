@@ -1,3 +1,18 @@
+Think through:
+- naming every task branch with :category :project :step
+
+- numbering tasks
+  - in today agenda
+	- don't number projects, auto-done them when the steps are done
+  - in browsing
+- fix browse so that it doesn't pull things from days* and done*
+- prettify the prints
+
+* implement projects that need to be done once
+
+
+
+---------------------------------
 # gd begin:
 	creates a new day setup
 

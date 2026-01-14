@@ -6,6 +6,7 @@ RUN_CMD_DEBUG = False
 
 GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
 os.chdir(GITODO_DIRECTORY)
+INSTALLED = os.path.isdir(GITODO_DIRECTORY+".git")
 
 def debug_proc(proc: subprocess.CompletedProcess):
     code = proc.returncode
@@ -50,7 +51,7 @@ def run_cmd(cmd: list[str], debug=False, exception=True) -> subprocess.Completed
     return proc
 
 def run_cmd_if(cmd: list[str], debug=False) -> bool:
-    return run_cmd(cmd, debug).returncode == 0
+    return run_cmd(cmd, debug, False).returncode == 0
 
 def run_cmd_(cmd: str, *args,  **kwargs) -> subprocess.CompletedProcess:
     return run_cmd(cmd.split(), *args, **kwargs)

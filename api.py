@@ -32,7 +32,7 @@ class AddCommand(Command):
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("name")
+        parser.add_argument("name", type=str)
         parser.add_argument("-i", "--index", dest='parent', type=int, help="Specify the parent")
         
         kind = parser.add_mutually_exclusive_group(required=True)
@@ -42,15 +42,15 @@ class AddCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         parent = task.index_through(args.parent) if args.parent is not None else 'last-parent'
-        names: list[str] = git.get_branches(parent)
-        names = [name for name in names if name != "last-parent"]
-        name = names[0]
-        if args.kind == "category":
-            name = f"{name}.{args.name}"
-        elif args.kind == "project":
-            name = f"{name}.{args.name}|"
-        elif args.kind == "step":
-            name = f"{name}||{args.name}"
+        name: str = git.get_branches(parent, exclude=['last-parent', 'main'])[0]
+        name = name[::-1].split('--', 1)[1][::-1]
+        name = f"{name}.{args.name}--{args.kind}"
+        # if args.kind == "category":
+        #     name = f"{name}.{args.name}"
+        # elif args.kind == "project":
+        #     name = f"{name}.{args.name}|"
+        # elif args.kind == "step":
+        #     name = f"{name}||{args.name}"
 
         git.branch(name, parent)
         git.switch(name)
@@ -224,7 +224,7 @@ class Install(Command):
             git.commit(f"{name.capitalize()} parent")
 
         git.branch('last-parent', 'tasks')
-        git.brach('today', 'days')
+        git.branch('today', 'days')
         
 
 def setup_parser() -> argparse.ArgumentParser:

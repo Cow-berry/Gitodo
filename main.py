@@ -20,11 +20,12 @@ def main() -> None:
     maybe_lock_in()
     
     parser = api.setup_parser()
+    # print(sys.argv[1:])
     args = parser.parse_args(sys.argv[1:])
+    # print(f"{args = }")
     cmd_cls: api.Command = [cls for cls in api.Command.__subclasses__() if args.command in cls.command][0]
     cmd_cls.run(args)
 
-    # print(f"{args = }")
     # print(f"{cmd_cls = }")
     
 if __name__ == "__main__":
