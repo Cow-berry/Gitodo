@@ -55,3 +55,6 @@ def run_cmd_if(cmd: list[str], debug=False) -> bool:
 
 def run_cmd_(cmd: str, *args,  **kwargs) -> subprocess.CompletedProcess:
     return run_cmd(cmd.split(), *args, **kwargs)
+
+def get_date(date: str="today") -> str:
+    return run_cmd(['date', '--date', date, '+"%x"']).stdout.strip()[1:-1]

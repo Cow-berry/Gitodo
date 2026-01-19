@@ -1,16 +1,14 @@
 import git
 import task
-from cmd import run_cmd, run_cmd_if, GITODO_DIRECTORY
+from cmd import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
 from pretty import *
 from commit import Commit
+import commit
 
 
 import argparse
 from colorama import Fore as f
 from colorama import Style as s
-
-def get_date(date: str="today") -> str:
-    return run_cmd(['date', '--date', date, '+"%x"']).stdout.strip()[1:-1]
 
 
 class Command:
@@ -33,7 +31,7 @@ class AddCommand(Command):
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("name", type=str)
-        parser.add_argument("-i", "--index", dest='parent', type=int, help="Specify the parent")
+        parser.add_argument("-i", "--index", dest='parent', type=str, help="Specify the parent")
         
         kind = parser.add_mutually_exclusive_group(required=True)
         for name in ['category', 'project', 'step']:
@@ -41,20 +39,18 @@ class AddCommand(Command):
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        parent = task.index_through(args.parent) if args.parent is not None else 'last-parent'
-        name: str = git.get_branches(parent, exclude=['last-parent', 'main'])[0]
-        name = name[::-1].split('--', 1)[1][::-1]
+        parent = commit.tasks
+        if args.parent:
+            parent = commit.tasks.get_nested([int(x) for x in args.parent.split('.')])
+            
+        name: str = parent.branches[0]
+        if args.parent:
+            name = name[::-1].split('--', 1)[1][::-1]
         name = f"{name}.{args.name}--{args.kind}"
-        # if args.kind == "category":
-        #     name = f"{name}.{args.name}"
-        # elif args.kind == "project":
-        #     name = f"{name}.{args.name}|"
-        # elif args.kind == "step":
-        #     name = f"{name}||{args.name}"
 
-        git.branch(name, parent)
+        git.branch(name, parent.hash)
         git.switch(name)
-        git.commit(f'{args.name}')
+        git.commit(f'{args.name.capitalize()}')
         if args.kind != "step":
             git.switch('last-parent')
             git.reset(name)
@@ -70,24 +66,8 @@ class BrowseCommand(Command):
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        git.switch('main')
-        git.reset('tasks')
-        hash = git.show('main', pretty='%H')
-        res: Task = task.traverse_hash(hash)
-        print(res)
-        
-
-        
-        # git.switch('last-parent')
-
-        # branch = 'last-parent'
-        # if args.choice is not None:
-        #     branch = git.get_children('last-parent')[args.choice]
-        #     git.reset(branch)
-
-        # for i, child in enumerate(git.get_children(branch)):
-        #     name = git.get_branches(child)[0]
-        #     print(f"{i}: {name}")
+        for task in commit.tasks.task_children:
+            print(task.traverse_str())
 
 
 class BeginCommand(Command):
@@ -128,7 +108,7 @@ class PickCommand(Command):
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("-i", "--index", dest='parent', type=int, help="Specify the parent")
+        parser.add_argument("-i", "--index", dest='parent', type=str, help="Specify the parent")
 
     @staticmethod
     def print_today() -> None:
@@ -140,17 +120,20 @@ class PickCommand(Command):
          
         
     @staticmethod
-    def add_to_today(task_hash: str) -> None:
+    def add_to_today(task: commit.TaskCommit) -> None:
         git.switch('today')
         end = Commit('today')
         start = end.parents[0]
         git.reset(start)
-        pick = git.merge_pick(task_hash, [start, task_hash], f'Pick: {Commit(task_hash).subject}')
+        pick = git.merge_pick(task.hash, [start, task.hash], f'Pick: {task.subject}')
         git.merge_pick(start, [*end.parents, pick], end.subject)
         git.reset_branch(get_date(), 'today')
         
-        [PickCommand.add_to_today(subtask) for subtask in git.get_children(task_hash, exclude=[pick])]
-    
+        [PickCommand.add_to_today(subtask) for subtask in task.task_children]
+
+    @staticmethod
+    def add_project_to(task: commit):
+        pass
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
@@ -160,7 +143,8 @@ class PickCommand(Command):
            cls.print_today()
            return
        
-        parent = task.index_through(args.parent)
+        parent = commit.tasks.get_nested([int(x) for x in args.parent.split('.')])
+        print(parent)
         cls.add_to_today(parent)
         
         
@@ -168,6 +152,20 @@ class PickCommand(Command):
         #     PickCommand.run(args, hash=subtask)
 
 
+class FinishCommand(Command):
+    command = ['finish']
+    
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("-i", "--index", dest='parent', type=str, help="Specify the parent")
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        parent = commit.tasks.get_nested([int(x) for x in args.parent.split('.')])
+        git.switch('finished')
+        git.merge_pick('finished', ['finished', parent.hash], f"Finished: {parent.subject}")
+        
+        
 class UnpickCommand(Command):
     command = ['unpick']
 

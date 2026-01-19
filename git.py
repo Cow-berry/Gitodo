@@ -3,7 +3,7 @@ from cmd import run_cmd, run_cmd_
 def _fix_name(name: str) -> str:
     return '-'.join(name.strip().split(' '))
 
-def log(child: str, parent: str, pretty: str = "%H", ancestry_path: bool = True) -> str:
+def log(parent: str, child: str, pretty: str = "%H", ancestry_path: bool = True) -> str:
     child = _fix_name(child)
     parent = _fix_name(parent)
 
@@ -13,7 +13,7 @@ def log(child: str, parent: str, pretty: str = "%H", ancestry_path: bool = True)
     if ancestry_path:
         flags.append('--ancestry-path')
             
-    return run_cmd(['git', 'log', f'{child}..{parent}'] + flags).stdout
+    return run_cmd(['git', 'log', f'{parent}..{child}'] + flags).stdout
 
 def show(node: str, pretty: str = "%P") -> str:
     node = _fix_name(node)
@@ -87,7 +87,7 @@ def get_branches(commit_hash: str, exclude: list[str] = []) -> list[str]:
 
 
 def check_belongs(child: str, parent: str):
-    return run_cmd_(f'git log {child}..{parent} --ancestry-path').stdout != ''
+    return run_cmd_(f'git log {parent}..{child} --ancestry-path').stdout != ''
 
 def show_debug(hashes: list[str]):
     print([show(hash, pretty='%h:%s') for hash in hashes])

@@ -1,3 +1,10 @@
+Now:
++ store special branch names
++ have the install sequence in the same place
+- finish a project
+- add only projects
+
+
 Think through:
 - naming every task branch with :category :project :step
 
