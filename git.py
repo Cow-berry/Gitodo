@@ -38,7 +38,7 @@ def branch(child: str, parent: str) -> None:
     
     run_cmd(['git', 'branch', child, parent])
 
-def branch_(child: str, parent: str) -> None:
+def branch_switch(child: str, parent: str) -> None:
     branch(child, parent)
     switch(child)
 

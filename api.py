@@ -1,5 +1,4 @@
 import git
-import task
 from cmd import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
 from pretty import *
 from commit import Commit
