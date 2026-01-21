@@ -1,9 +1,9 @@
 General:
-	- store changeable in notes
-	- store debug in commit msg
+	* store changeable in notes
+	* store debug in commit msg
 
 Concrete steps:
-	- update cmd to return ok flags
+	+ update cmd to return ok flags
 	- implement create
 	- implement browse
 	- implement (un)focus

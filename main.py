@@ -15,19 +15,28 @@ def maybe_lock_in() -> None | NoReturn:
         print("Locked In Successfully")
         exit(0)
     
-@cmd.run_except
 def main() -> None:
     maybe_lock_in()
     
     parser = api.setup_parser()
-    # print(sys.argv[1:])
     args = parser.parse_args(sys.argv[1:])
-    # print(f"{args = }")
-    cmd_cls: api.Command = [cls for cls in api.Command.__subclasses__() if args.command in cls.command][0]
+
+    cmd_cls: api.Command = ([cls for cls in api.Command.__subclasses__() if args.command in cls.command] + [None])[0]
+        
+    if args.debug:
+        print(f"{sys.argv[1:] = }")
+        cmd.RUN_CMD_DEBUG = True
+        print(f"{args = }")    
+        print(f"{cmd_cls = }")
+    
+    if not cmd_cls:
+        print("No command was provided")
+        exit(1)
+    
     cmd_cls.run(args)
 
-    # print(f"{cmd_cls = }")
     
 if __name__ == "__main__":
     main()
     os.chdir(cmd.GITODO_DIRECTORY)
+    

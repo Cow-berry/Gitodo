@@ -13,7 +13,7 @@ def log(parent: str, child: str, pretty: str = "%H", ancestry_path: bool = True)
     if ancestry_path:
         flags.append('--ancestry-path')
             
-    return run_cmd(['git', 'log', f'{parent}..{child}'] + flags).stdout
+    res, ok = run_cmd(['git', 'log', f'{parent}..{child}'] + flags).stdout
 
 def show(node: str, pretty: str = "%P") -> str:
     node = _fix_name(node)
