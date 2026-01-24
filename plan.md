@@ -3,7 +3,7 @@ General:
 	* store debug in commit msg
 
 Concrete steps:
-	+ update cmd to return ok flags
+	~ update cmd&git to return a Result
 	- implement create
 	- implement browse
 	- implement (un)focus

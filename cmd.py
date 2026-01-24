@@ -1,5 +1,7 @@
 import subprocess
 import os
+from typing import TypeAlias
+import expression as e
 
 RUN_CMD_DEBUG = False
 # RUN_CMD_DEBUG = True
@@ -7,6 +9,9 @@ RUN_CMD_DEBUG = False
 GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
 os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY+".git")
+
+type Error = str
+type Result[T] = e.Result[T, Error]
 
 def debug_proc(proc: subprocess.CompletedProcess):
     code = proc.returncode
@@ -19,25 +24,28 @@ def debug_proc(proc: subprocess.CompletedProcess):
     print('-'*line_lengh)
     return proc
 
-def run_cmd(cmd: list[str], ok=True) -> (subprocess.CompletedProcess | tuple[subprocess.CompletedProcess, bool]):
+
+def run_cmd_proc(cmd: list[str]) -> Result[subprocess.CompletedProcess]:
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc.stdout = proc.stdout.decode('utf-8').strip()
     proc.stderr = proc.stderr.decode('utf-8').strip()
     if RUN_CMD_DEBUG:
         debug_proc(proc)
-    if ok:
-        return proc, proc.returncode == 0
-    return proc
+    if proc.returncode == 0:
+        return e.Ok(proc)
+    return e.Error(f"Failed to execute {cmd}:\n{proc.stderr}")
+
+def run_cmd(cmd: list[str]) -> Result[str]:
+    return run_cmd_proc(cmd).map(lambda x: x.stdout)
+
+def run_cmd_strip(cmd: list[str]) -> Result[None]:
+    return run_cmd_proc(cmd).map(lambda _: None)
 
 def run_cmd_if(cmd: list[str], *args, **kwargs) -> bool:
-    _, ok = run_cmd(cmd, *args, **kwargs, ok=True)
-    return ok
-
-def run_cmd_(cmd: str, *args,  **kwargs) -> (subprocess.CompletedProcess | tuple[subprocess.CompletedProcess, bool]):
+    return run_cmd_proc(cmd, *args, **kwargs).is_ok()
+    
+def run_cmd_(cmd: str, *args,  **kwargs) -> Result[str]:
     return run_cmd(cmd.split(), *args, **kwargs)
 
-def get_date(date: str="today") -> str:
-     result, ok = run_cmd(['date', '--date', date, '+"%x"'])
-     if not ok: # user input if any must be checked first
-         print(f"Could not get date `{date}`")
-     return result.stdout.strip()[1:-1]
+def get_date(date: str="today") -> Result[str]:
+    return run_cmd(['date', '--date', date, '+"%x"'])
