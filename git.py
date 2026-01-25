@@ -38,7 +38,7 @@ def branch(child: str, parent: str) -> Result[None]:
     
     return run_cmd_strip(['git', 'branch', child, parent])
 
-@e.effect.result[None, str]
+@e.effect.result[None, str]()
 def branch_switch(child: str, parent: str):
     yield from branch(child, parent)
     yield from switch(child)
@@ -48,7 +48,7 @@ def reset(node: str, mode: str = '--mixed') -> Result[None]:
     
     return run_cmd_strip(['git', 'reset', mode, node])
 
-@e.effect.result[None, str]
+@e.effect.result[None, str]()
 def reset_branch(b_from: str, b_to: str, *args, **kwargs):
     yield from switch(b_from)
     yield from reset(b_to, *args, **kwargs)
@@ -63,7 +63,7 @@ def merge_pick(tree: str, parents: list[str], message: str, merge=True):
     parents = [x for parent in parents for x in ['-p', parent]]
     commit_cmd = ['git', 'commit-tree', '-m', message, *parents, f'{tree}^{{tree}}']
 
-    commit_hash = yield from run_cmd(commi_cmd).
+    commit_hash = yield from run_cmd(commit_cmd)
     if merge:
         merge_cmd = ['git', 'merge', '--ff-only', commit_hash]
         yield from run_cmd_proc(merge_cmd)
@@ -88,7 +88,7 @@ def get_parents(commit_hash: str, exclude: list[str] = []) -> Result[list[str]]:
     
 def get_branches(commit_hash: str, exclude: list[str] = []) -> Result[list[str]]:
     return run_cmd(['git', 'branch', '--points-at', commit_hash, '--format=%(refname:lstrip=2)'])\
-        .map(s: s.split(' '))\
+        .map(lambda s: s.split(' '))\
         .map(lambda l: list(filter(lambda x: x not in exclude, l)))   
 
 def check_belongs(child: str, parent: str) -> bool:
@@ -97,3 +97,19 @@ def check_belongs(child: str, parent: str) -> bool:
 def show_debug(hashes: list[str]):
     print([show(hash, pretty='%h:%s') for hash in hashes])
     return hashes
+
+def notes_show(hash: str) -> Result[str]:
+    return run_cmd(['git', 'notes', 'show', hash])
+
+@e.effect.result[list[str], str]()
+def notes_show_list(hashes: list[str]) -> Result[list[str]]:
+    result = []
+    for hash in hashes:
+        note = yield from notes_show(hash)
+        result.append(note)
+    return result
+
+def notes_add(hash: str, note: str) -> Result[None]:
+    print(f"{hash = }")
+    print(f"{note = }")
+    return run_cmd(['git', 'notes', 'add', '-fm', note, hash])

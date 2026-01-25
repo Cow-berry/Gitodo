@@ -20,6 +20,15 @@ Concrete steps:
 		*in case if none provided, it's reated from <name>
 	--focus optionally focuses on the specified parent
 	
+### gd create category existing1.existing2.new3.new4
+	- split by .
+	- check in @categories branch for existing ones
+	: for each
+		- make commit in @task-storage
+		- add notes for custom names and other fields
+	- remerge-append the new branches into the @categories
+	
+	
 # gd (un)focus <p:USN>
 	makes the `gd create` parent <p> by default 
 	
@@ -30,6 +39,14 @@ Concrete steps:
 # gd browse <USN> [--regexp <regexp:str>]
 	shows all projects
 	--regexp optionally filters them by a regex
+
+--Notes--
+Category:
+	hash: <str>
+	name: <str>
+	display\_name: <str>
+	display\_colour: <int> | tuple[int, int, int]
+	
 
 --- DAYS ARENA -------
 	

@@ -1,11 +1,13 @@
 import api
 import cmd
+from cmd import Result
 
 import colorama
 import os
 import sys
 import subprocess
 from typing import Optional, Callable
+import expression as e
             
 
 def maybe_lock_in() -> None | NoReturn:
@@ -33,7 +35,9 @@ def main() -> None:
         print("No command was provided")
         exit(1)
     
-    cmd_cls.run(args)
+    run = cmd_cls.run(args)
+    if run.is_error():
+        print(f"# Error occured:\n{run.error}")
 
     
 if __name__ == "__main__":

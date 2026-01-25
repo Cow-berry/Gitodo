@@ -33,7 +33,7 @@ def run_cmd_proc(cmd: list[str]) -> Result[subprocess.CompletedProcess]:
         debug_proc(proc)
     if proc.returncode == 0:
         return e.Ok(proc)
-    return e.Error(f"Failed to execute {cmd}:\n{proc.stderr}")
+    return e.Error(f"# Failed to execute {cmd}:\n{proc.stderr}")
 
 def run_cmd(cmd: list[str]) -> Result[str]:
     return run_cmd_proc(cmd).map(lambda x: x.stdout)
@@ -49,3 +49,14 @@ def run_cmd_(cmd: str, *args,  **kwargs) -> Result[str]:
 
 def get_date(date: str="today") -> Result[str]:
     return run_cmd(['date', '--date', date, '+"%x"'])
+
+
+def sequence[T, U](results: list[e.Result[T, U]]) -> e.Result[list[T], U]:
+    result = []
+    for result in results:
+        match result:
+            case e.Ok(x):
+                result.append(x)
+            case e.Error(err):
+                return e.Error(err)
+    return e.Ok(result)
