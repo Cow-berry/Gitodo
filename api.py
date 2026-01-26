@@ -1,7 +1,7 @@
 import git
-from cmd import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date, e, Result
+from cmd import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
 from pretty import *
-from commit import Commit
+from commit import Commit, rb
 import commit
 import task
 
@@ -20,7 +20,7 @@ class Command:
         pass
 
     @classmethod
-    def run(cls, args: argparse.Namespace) -> Result[None]:
+    def run(cls, args: argparse.Namespace) -> None:
         return e.Error()
 
 class CreateCommand(Command):
@@ -36,25 +36,62 @@ class CreateCommand(Command):
         parser.add_argument('--focus', '-f', action="store_true", dest='focus')
 
     @staticmethod
-    @e.effect.result[None, str]()
-    def create_category(args: argparse.Namespace) -> Result[None]:
-        existing_categories: list[task.Category] = yield from task.get_existing_categories()
-        existing_path_names = dict([(cat.path_name, cat) for cat in existing_categories])
+    def create_category(args: argparse.Namespace) -> None:
+        
+        existing_categories: list[task.Category] = task.get_existing_categories()
+        existing_path_names = {cat.path_name: cat for cat in existing_categories}
 
         category_names: list[str] = args.name.split('.')
-        path_names = ['.'.join(category_names[:(i+1)]) for i in range(len(category_names))]
-        path_names = [path_name for path_name in path_names if path_name not in existing_path_names]
+        path_names = [(i, join_name)
+                      for i in range(len(category_names))
+                      if (join_name:='.'.join(category_names[:(i+1)])) not in existing_path_names]
 
-        if not path_names: return None
-        if '.' not in path_names[0]:
-            yield from git.switch('task-storage')
+        if len(path_names) == 0:
+            print(f"{args.name} already exists")
+            return
+
+        git.switch('crawl')
+        i, path_name = path_names[0]
+        if i == 0:
+            git.reset('task-storage')
         else:
-            parent_path_name = path_names[0][::-1].split('.', 1)[1][::-1]
-            parent_cat = existing_path_names.get(parent_path_name)
-            if not parent_cat: return e.Error(f"Unreachable: Could not find category {parent_path_name}")
-            yield from git.switch(parent_cat.hash)
+            name = '.'.join(category_names[:i])
+            cat = existing_path_names[name]
+            git.reset(cat.hash)
+
+        for _, path_name in path_names:
+            hash = git.commit_hash(path_name)
+            git.notes_add(hash, task.Category(hash, path_name).generate_note())
+
+            git.switch(rb.CATEGORIES)
+            prev = Commit(rb.CATEGORIES)
+            git.reset(rb.TASK_STORAGE)
+            git.merge_pick(prev.hash, prev.parents + [hash], prev.subject)
+            git.switch(rb.CRAWL)
+            
         
-        for path_name in path_names:
+        
+        
+        
+    # @staticmethod
+    # def create_category(args: argparse.Namespace) -> None:
+    #     existing_categories: list[task.Category] = yield from task.get_existing_categories()
+        # existing_path_names = dict([(cat.path_name, cat) for cat in existing_categories])
+
+    #     category_names: list[str] = args.name.split('.')
+    #     path_names = ['.'.join(category_names[:(i+1)]) for i in range(len(category_names))]
+    #     path_names = [path_name for path_name in path_names if path_name not in existing_path_names]
+
+    #     if not path_names: return None
+    #     if '.' not in path_names[0]:
+    #         yield from git.switch('task-storage')
+    #     else:
+    #         parent_path_name = path_names[0][::-1].split('.', 1)[1][::-1]
+    #         parent_cat = existing_path_names.get(parent_path_name)
+    #         if not parent_cat: return e.Error(f"Unreachable: Could not find category {parent_path_name}")
+    #         yield from git.switch(parent_cat.hash)
+        
+        # for path_name in path_names:
             
 
             
@@ -70,7 +107,7 @@ class CreateCommand(Command):
             #     .map(lambda: git.switch('-'))
             
 
-        return e.Ok(None)
+        # return e.Ok(None)
             
             
     @classmethod

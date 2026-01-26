@@ -1,6 +1,5 @@
 import api
 import cmd
-from cmd import Result
 
 import colorama
 import os
@@ -24,8 +23,7 @@ def main() -> None:
     args = parser.parse_args(sys.argv[1:])
 
     cmd_cls: api.Command = ([cls for cls in api.Command.__subclasses__() if args.command in cls.command] + [None])[0]
-        
-    if args.debug:
+    if 'debug' in args and args.debug:
         print(f"{sys.argv[1:] = }")
         cmd.RUN_CMD_DEBUG = True
         print(f"{args = }")    
@@ -35,10 +33,7 @@ def main() -> None:
         print("No command was provided")
         exit(1)
     
-    run = cmd_cls.run(args)
-    if run.is_error():
-        print(f"# Error occured:\n{run.error}")
-
+    cmd_cls.run(args)
     
 if __name__ == "__main__":
     main()

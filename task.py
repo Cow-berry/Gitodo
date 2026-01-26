@@ -1,5 +1,4 @@
 import git
-from cmd import sequence
 
 from dataclasses import dataclass
 import expression as e
@@ -51,11 +50,11 @@ class Category:
         return self.path_name.split('.')[-1]
 
     def generate_note(self):
-        return f"""
-        hash: {self.hash}
-        path_name: {self.path_name}
-        display_name: {self.display_name}
-        display_colour: {self.display_colour}
+        return f"""\
+hash: {self.hash}
+path_name: {self.path_name}
+display_name: {self.display_name}
+display_colour: {self.display_colour}
         """
 
 
@@ -72,18 +71,20 @@ def process_colour(colour: str) -> Colour:
         return RGB(*args)
     else:
         return UnknownColour(colour)
+
+class ParsingException(Exception):
+    pass
+
     
-def process_category(note: str) -> e.Result[Category, str]:
+def process_category(note: str) -> Category:
     args = dict([
         tuple([s.strip() for s in line.split(':', 1)])
         for line in note.split('\n') if ':' in line])
-    if not all([field in args for field in Category.__dataclass_fields__()]):
-        return Error(f"This is not a valid category:\n{note}")
+    if not all([field in args for field in Category.__dataclass_fields__]):
+        raise ParsingException(f"This is not a valid category:\n{note}")
     return Category(**args)
 
 
-def get_existing_categories() -> e.Result[Category, str]:
-    return sequence(git.get_parents('categories')
-            .map(lambda l: l[1:])
-            .bind(git.notes_show_list)
-            .bind(lambda l: list(map(process_category, l))))
+def get_existing_categories() -> list[Category]:
+    categories = git.get_parents('categories')[1:]
+    return [process_category(cat) for cat in git.notes_show_list(categories)]

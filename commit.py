@@ -1,12 +1,20 @@
 import git
 from pretty import *
 from cmd import INSTALLED, run_cmd, get_date
+from git import get_hash
 
 from typing import Optional
 
 TAB = ' '*3
 
 # SPECIAL_BRANCHES = ['done', 'finished', 'days', 'last-parent', 'today', 'main', get_date()]
+
+class ReservedBranches:
+    TASK_STORAGE = 'task-storage'
+    CATEGORIES = 'categories'
+    CRAWL = 'crawl'
+
+rb = ReservedBranches
 
 def install():
     run_cmd(["git",  "init"])
@@ -19,14 +27,12 @@ def install():
 class Commit:
     hash: str
     subject: str
-    branches: list[str]
     parents: list[str]
     
     def __init__(self, commit_hash: str):
+        commit_hash = get_hash(commit_hash)
         self.hash = commit_hash
         self.subject = git.show(self.hash, pretty="%s")
-        self.branches = git.get_branches(self.hash, exclude=SPECIAL_BRANCHES)
         self.parents = git.get_parents(self.hash)
-
 
 
