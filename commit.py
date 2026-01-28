@@ -13,6 +13,7 @@ class ReservedBranches:
     TASK_STORAGE = 'task-storage'
     CATEGORIES = 'categories'
     CRAWL = 'crawl'
+    PROJECTS = 'projects'
 
 rb = ReservedBranches
 

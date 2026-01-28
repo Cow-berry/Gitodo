@@ -28,6 +28,10 @@ Concrete steps:
 		- add notes for custom names and other fields
 	- remerge-append the new branches into the @categories
 	
+### gd create project -p cat1.cat2.cat3 project
+
+### gd create step -p cat1.cat2.cat3.project 
+
 	
 # gd (un)focus <p:USN>
 	makes the `gd create` parent <p> by default 

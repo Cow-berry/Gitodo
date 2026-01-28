@@ -42,14 +42,14 @@ class Category:
     def __init__(self, hash: str, path_name: str | None = None, display_name: str | None = None, display_colour: str | None = None, **kwargs):
         self.hash = hash
         self.path_name = path_name
-        self.display_name = display_name or path_name.capitalize()
+        self.display_name = display_name or '.'.join([part.capitalize() for part in  path_name.split()])
         self.display_colour = process_colour(display_colour or self.DEFAULT_COLOUR)
 
     @property
     def name(self) -> str:
         return self.path_name.split('.')[-1]
 
-    def generate_note(self):
+    def generate_note(self) -> str:
         return f"""\
 hash: {self.hash}
 path_name: {self.path_name}
@@ -58,6 +58,14 @@ display_colour: {self.display_colour}
         """
 
 
+class Project(Category):
+    DEFAULT_COLOUR = "100" #todo
+
+    def name(self) -> str:
+        return self.path_name.split
+    
+    
+    
 
 def process_colour(colour: str) -> Colour:
     args = colour.split(',')
@@ -88,3 +96,6 @@ def process_category(note: str) -> Category:
 def get_existing_categories() -> list[Category]:
     categories = git.get_parents('categories')[1:]
     return [process_category(cat) for cat in git.notes_show_list(categories)]
+
+def get_category_by_name(name: str) -> Category | None:
+    return {cat.path_name: cat for cat in get_existing_categories()}.get(name)
