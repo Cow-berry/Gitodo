@@ -9,7 +9,7 @@ from typing import Optional, Callable
 import expression as e
             
 
-def maybe_lock_in() -> None | NoReturn:
+def maybe_lock_in() -> None:
     if sys.argv[1:3] == ['lock', 'in']:
         os.chdir('/home/cowberry/Projects/Gitodo')
         subprocess.Popen(['emacs'])
@@ -22,7 +22,8 @@ def main() -> None:
     parser = api.setup_parser()
     args = parser.parse_args(sys.argv[1:])
 
-    cmd_cls: api.Command = ([cls for cls in api.Command.__subclasses__() if args.command in cls.command] + [None])[0]
+    cmd_cls: type[api.Command] | None = ([cls for cls in api.Command.__subclasses__() if args.command in cls.command] + [None])[0]
+    
     if 'debug' in args and args.debug:
         print(f"{sys.argv[1:] = }")
         cmd.RUN_CMD_DEBUG = True

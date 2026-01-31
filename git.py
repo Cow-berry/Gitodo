@@ -1,5 +1,7 @@
 from cmd import run_cmd, run_cmd_
 
+from typing import Callable
+
 def _fix_name(name: str) -> str:
     return '-'.join(name.strip().split(' '))
 
@@ -77,10 +79,12 @@ def merge_pick(tree: str, parents: list[str], message: str, merge=True) -> str:
         run_cmd(merge_cmd)
     return commit_hash
 
+    
+
 def get_children(parent: str, exclude: list[str] = []) -> list[str]:
     parent = show(parent, pretty="%H")
     cmd = ['git', 'rev-list', '--all', '--parents']
-    families = [familiy.split(' ') for family in run_cmd(cmd).split('\n')]
+    families = [family.split(' ') for family in run_cmd(cmd).split('\n')]
     return [child
             for child, *parents in families
             if parent in parents
@@ -111,5 +115,9 @@ def notes_show_list(hashes: list[str]) -> list[str]:
     if not hashes: return []
     return show(hashes, pretty="%N").split('\n\n')
 
-def notes_add(hash: str, note: str) -> Result[None]:
-    return run_cmd(['git', 'notes', 'add', '-fm', note, hash])
+def notes_add(hash: str, note: str) -> None:
+    run_cmd(['git', 'notes', 'add', '-fm', note, hash])
+
+def notes_copy(hash_from: str, hash_to: str) -> None:
+    run_cmd(['git', 'notes', 'copy', hash_from, hash_to])
+

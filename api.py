@@ -4,6 +4,7 @@ from pretty import *
 from commit import Commit, rb
 import commit
 import task
+from task import Category, Project, Step
 
 
 import argparse
@@ -12,7 +13,7 @@ from colorama import Style as s
 
 
 class Command:
-    command = []
+    command: list[str] = []
     help = ""
     
     @staticmethod
@@ -21,7 +22,7 @@ class Command:
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        return e.Error()
+        pass
 
 class CreateCommand(Command):
     command = ['create', 'c']
@@ -36,7 +37,11 @@ class CreateCommand(Command):
 
         project = subcmds.add_parser('project', aliases=['p'])
         project.add_argument('name', type=str)
-        project.add_argument('--parent', '-p', type=str)
+        project.add_argument('--parent', '-p', type=str, required=True)
+
+        step = subcmds.add_parser('step', aliases=['s'])
+        step.add_argument('name', type=str)
+        step.add_argument('--parent', '-p', type=str, required=True)
         
         # parser.add_argument('task_type', choices=['category', 'c', 'project', 'p', 'step', 's'])
         # parser.add_argument('name', type=str)
@@ -45,73 +50,60 @@ class CreateCommand(Command):
         # parser.add_argument('--focus', '-f', action="store_true", dest='focus')
 
     @staticmethod
-    def create_category(name: str, silent: bool=False) -> None:
-        
-        existing_categories: list[task.Category] = task.get_existing_categories()
-        existing_path_names = {cat.path_name: cat for cat in existing_categories}
+    def create_category(name: str, silent: bool=False) -> Category:
+        existing_path_names: dict[str, Category] = Category.get_existing_dict()
 
         category_names: list[str] = name.split('.')
-        path_names = [(i, join_name)
-                      for i in range(len(category_names))
-                      if (join_name:='.'.join(category_names[:(i+1)])) not in existing_path_names]
+        category_names = ['.'.join(category_names[:(i+1)]) for i in range(len(category_names))]
 
-        if len(path_names) == 0:
+        git.switch(rb.CRAWL)
+        prev = None
+        for i, cat in enumerate(category_names):
+            if cat not in existing_path_names:
+                git.reset(prev or rb.TASK_STORAGE)
+                break
+            prev = existing_path_names[cat].hash
+        else:
             if not silent:
                 print(f"{name} already exists")
-            return
+            return existing_path_names[name]
 
-        git.switch('crawl')
-        i, path_name = path_names[0]
-        if i == 0:
-            git.reset('task-storage')
-        else:
-            name = '.'.join(category_names[:i])
-            cat = existing_path_names[name]
-            git.reset(cat.hash)
-
-        for _, path_name in path_names:
-            hash = git.commit_hash(path_name)
-            git.notes_add(hash, task.Category(hash, path_name).generate_note())
-
-            git.switch(rb.CATEGORIES)
-            prev = Commit(rb.CATEGORIES)
-            git.reset(rb.TASK_STORAGE)
-            git.merge_pick(prev.hash, prev.parents + [hash], prev.subject)
+        for category_name in category_names[i:]:
+            hash = git.commit_hash(category_name)
+            git.notes_add(hash, Category(hash, category_name).generate_note())
+            commit.branch_list_append(rb.CATEGORIES, hash)
             git.switch(rb.CRAWL)
 
+        return Category.get_by_name(name)
+
+    
 
     @staticmethod
     def create_project(args: argparse.Namespace) -> None:
+        CreateCommand.create_category(args.parent, silent=True)
         path_name = f'{args.parent}|{args.name}'
-        cat = args.parent
-        cat = task.get_category_by_name(cat)
-        CreateCommand.create_category(cat.path_name, silent=True)
+        cat: Category = Category.get_by_name(args.parent)
 
-        git.switch('crawl')
+        git.switch(rb.CRAWL)
         git.reset(cat.hash)
         git.commit(f'{path_name} parent ')
         hash = git.commit_hash(path_name)
-        git.notes_add(hash, task.Project(hash, path_name).generate_note())
+        git.notes_add(hash, Project(hash, path_name).generate_note())
+
+        commit.branch_list_append(rb.PROJECTS, hash)
         
-        git.switch(rb.PROJECTS)
-        prev = Commit(rb.PROJECTS)
-        git.reset(rb.TASK_STORAGE)
-        git.merge_pick(prev.hash, prev.parents + [hash], prev.subject)
-
     @staticmethod
-    def create_step(args: argparse.Namespace) -> None: # PROTOTYPE
-        proj = task.get_project_by_name(args.parent)
-        prev = Commit(proj.hash)
+    def create_step(args: argparse.Namespace) -> None:
+        proj: Project | None = Project.maybe_get_by_name(args.parent)
+        if proj is None:
+            print(f"Project {args.parent} doesn't exist")
+            return
 
-        git.switch('crawl')
-        git.reset(prev.parents[0])
-        hash = git.commit(args.name)
-        new_hash = git.merge_pick(prev.hash, prev.parents + [hash], prev.subject)
-
-        prev = Commit(rb.PROJECTS)
-        parents = prev.parents
-        parents[parents.index(hash)] = new_hash
-        git.merge_pick(prev.hash, parents)
+        git.switch(rb.CRAWL)
+        git.reset(proj.project_root)
+        step_hash = git.commit_hash(args.name)
+        new_proj_hash = commit.branch_list_append(proj.hash, step_hash, is_branch=False)
+        commit.branch_list_replace(rb.PROJECTS, proj.hash, new_proj_hash)
         
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
@@ -122,12 +114,8 @@ class CreateCommand(Command):
         elif task_type.startswith('p'):
             cls.create_project(args)
         elif task_type.startswith('s'):
-            print("Adding a step")
+            cls.create_step(args)
 
-    @staticmethod
-    def add_category(args: argparse.Namespace) -> None:
-        pass
-        
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='Gitodo')
     sub_parsers = parser.add_subparsers(dest='command')

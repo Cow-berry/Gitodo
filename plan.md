@@ -51,6 +51,18 @@ Category:
 	display\_name: <str>
 	display\_colour: <int> | tuple[int, int, int]
 	
+Project:	
+	hash: <str>
+	name: <str>
+	display\_name: <str>
+	display\_colour: <int> | tuple[int, int, int]
+	steps: list[str]
+	
+Step:
+	hash: <str>
+	name: <str>
+	display\_name: <str>
+	display\_colour: <int> | tuple[int, int, int]
 
 --- DAYS ARENA -------
 	

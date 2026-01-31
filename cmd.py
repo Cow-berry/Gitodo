@@ -26,12 +26,12 @@ class RunException(Exception):
 
 def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedProcess:
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    proc.stdout = proc.stdout.decode('utf-8').strip()
-    proc.stderr = proc.stderr.decode('utf-8').strip()
+    proc.stdout = proc.stdout.decode('utf-8').strip() # type: ignore
+    proc.stderr = proc.stderr.decode('utf-8').strip() # type: ignore
     if RUN_CMD_DEBUG:
         debug_proc(proc)
     if proc.returncode != 0 and do_raise:
-        raise RunException(f"# Failed to execute {cmd}:\n{proc.stderr}")
+        raise RunException(f"# Failed to execute {cmd}:\n{proc.stderr}") # type: ignore
     return proc
 
 def run_cmd(cmd: list[str]) -> str:
@@ -43,5 +43,5 @@ def run_cmd_if(cmd: list[str], *args, **kwargs) -> bool:
 def run_cmd_(cmd: str, *args,  **kwargs) -> str:
     return run_cmd(cmd.split(), *args, **kwargs)
 
-def get_date(date: str="today") -> Result[str]:
+def get_date(date: str="today") -> str:
     return run_cmd(['date', '--date', date, '+"%x"'])

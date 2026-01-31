@@ -1,7 +1,10 @@
 import git
 
+from typing import Self
 from dataclasses import dataclass
 import expression as e
+from commit import rb
+from pprint import pprint
 
 class Colour:
     pass
@@ -13,7 +16,7 @@ class RGB(Colour):
     b: int
 
     def __str__(self) -> str:
-        return f"{r},{g},{b}"
+        return f"{self.r},{self.g},{self.b}"
 
 @dataclass
 class Palette256(Colour):
@@ -27,7 +30,7 @@ class UnknownColour(Colour):
     colour: str
     
     def __str__(self) -> str:
-        return colour
+        return self.colour
   
 
 @dataclass
@@ -38,8 +41,9 @@ class Category:
     display_colour: Colour
 
     DEFAULT_COLOUR = "99"
+    LIST_BRANCH = rb.CATEGORIES
 
-    def __init__(self, hash: str, path_name: str | None = None, display_name: str | None = None, display_colour: str | None = None, **kwargs):
+    def __init__(self, hash: str, path_name: str, display_name: str | None = None, display_colour: str | None = None, **kwargs):
         self.hash = hash
         self.path_name = path_name
         self.display_name = display_name or '.'.join([part.capitalize() for part in  path_name.split()])
@@ -57,21 +61,64 @@ display_name: {self.display_name}
 display_colour: {self.display_colour}
         """
 
+    @classmethod
+    def process_note(cls, note: str) -> Self:
+        lines = [line.split(':', 1) for line in note.split('\n') if ':' in line]
+        args = {name.strip(): arg.strip() for name, arg in lines}
+
+        if not all([field in args for field in cls.__dataclass_fields__]):
+            raise ParsingException(f"This is not a valid task:\n{note}\n Expected fields: {list(cls.__dataclass_fields__)}")
+        return cls(**args)
+
+    @classmethod
+    def get_existing(cls) -> list[Self]:
+        tasks = git.get_parents(cls.LIST_BRANCH)[1:]
+        pprint(tasks)
+        return [cls.process_note(note) for note in git.notes_show_list(tasks)]
+
+    @classmethod
+    def get_existing_dict(cls) -> dict[str, Self]:
+        deb= {task.path_name: task for task in cls.get_existing()}
+        pprint(deb)
+        return deb
+
+    @classmethod
+    def maybe_get_by_name(cls, name: str) -> Self | None:
+        return cls.get_existing_dict().get(name)
+
+    @classmethod
+    def get_by_name(cls, name: str) -> Self:
+        return cls.get_existing_dict()[name]
+        
+
 
 class Project(Category):
+    steps: list[str]
+    
     DEFAULT_COLOUR = "100" #todo
+    LIST_BRANCH = rb.PROJECTS
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.steps = git.get_parents(self.hash)
+
+    @property
     def name(self) -> str:
-        return self.path_name.split
-    
-    
+        return self.path_name.split()[-1]
+
+    @property
+    def project_root(self) -> str:
+        return git.get_parents(self.hash)[0]
+
+class Step(Category):
+    pass
     
 
 def process_colour(colour: str) -> Colour:
-    args = colour.split(',')
-    if not all([str.isdecimal(arg) for arg in args]):
+    args_str = colour.split(',')
+    if not all([str.isdecimal(arg) for arg in args_str]):
         return UnknownColour(colour)
-    args = [int(arg) for arg in args]
+    args = [int(arg) for arg in args_str]
     
     if len(args) == 1:
         return Palette256(args[0])
@@ -83,19 +130,3 @@ def process_colour(colour: str) -> Colour:
 class ParsingException(Exception):
     pass
 
-    
-def process_category(note: str) -> Category:
-    args = dict([
-        tuple([s.strip() for s in line.split(':', 1)])
-        for line in note.split('\n') if ':' in line])
-    if not all([field in args for field in Category.__dataclass_fields__]):
-        raise ParsingException(f"This is not a valid category:\n{note}")
-    return Category(**args)
-
-
-def get_existing_categories() -> list[Category]:
-    categories = git.get_parents('categories')[1:]
-    return [process_category(cat) for cat in git.notes_show_list(categories)]
-
-def get_category_by_name(name: str) -> Category | None:
-    return {cat.path_name: cat for cat in get_existing_categories()}.get(name)
