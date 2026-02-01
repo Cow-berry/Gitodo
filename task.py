@@ -119,6 +119,30 @@ class Project(Category):
     def get_list_by_name(cls, name: str) -> list[Self]:
         return [proj for proj in cls.get_existing() if proj.name == name]
 
+    @classmethod
+    def pick_project(cls, name: str) -> Project | None:
+        projects: list[Project] = Project.get_list_by_name(name)
+        if len(projects) == 0:
+            return None
+        elif len(projects) == 1:
+            return  projects[0]
+        
+        print("Choose one of these projects:")
+        for i, p in enumerate(projects):
+            print(f"{i}. {p.path_name}")
+            
+        while True:
+            inp = input(f"Enter number in [0, {len(projects)-1}]: ")
+            if not inp.isdecimal():
+                print("Not a number")
+                continue
+            index = int(inp)
+            if index < 0 or index >= len(projects):
+                print("Out of range")
+                continue
+            break
+        return projects[index]
+
 class Step(Category):
     @property
     def name(self) -> str:

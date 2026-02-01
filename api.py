@@ -104,27 +104,10 @@ class CreateCommand(Command):
         
     @staticmethod
     def create_step(args: argparse.Namespace) -> None:
-        projects: list[Project] = Project.get_list_by_name(args.parent)
-        if len(projects) == 0:
+        proj: Project | None = Project.pick_project(args.parent)
+        if proj is None:
             print(f"Project {args.parent} doesn't exist")
             return
-        elif len(projects) == 1:
-            proj = projects[0]
-        else:
-            print("Choose one of these projects:")
-            for i, p in enumerate(projects):
-                print(f"{i}. {p.path_name}")
-            while True:
-                inp = input(f"Enter number in [0, {len(projects)-1}]: ")
-                if not inp.isdecimal():
-                    print("Not a number")
-                    continue
-                index = int(inp)
-                if index < 0 or index >= len(projects):
-                    print("Out of range")
-                    continue
-                break
-            proj = projects[index]
 
         git.switch(rb.CRAWL)
         git.reset(proj.project_root)
@@ -166,7 +149,41 @@ class BrowseCommand(Command):
             print(f"{cls.TAB}{f.LIGHTCYAN_EX}{proj.name}{s.RESET_ALL}")
             for i, step in enumerate(proj.get_steps()):
                 print(f"{cls.TAB*2}{f.CYAN}{i}. {step.name}{s.RESET_ALL}")
-            
+
+class AssignCommand(Command):
+    command = ["assign"]
+    help = "Assign a task to today's agenda"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('name', type=str)
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        proj = Project.pick_project(args.name)
+        if proj is None:
+            print(f"Project {args.name} doesn't exist")
+            return
+
+        git.switch(rb.TODAY)
+        old_today = git.get_hash(rb.TODAY)
+        new_today = commit.branch_list_append(rb.TODAY, proj.hash)
+        commit.branch_list_replace(rb.DAYS, old_today, new_today)
+
+class TodayCommand(Command):
+    command = ["today"]
+    help = "Show today's agenda"
+    TAB = " "*3
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        projects = Project.get_existing(rb.TODAY)
+        for i, proj in enumerate(projects):
+            print(f"[{i}] {f.RED}{proj.name}{s.RESET_ALL}")
+            for j, step in enumerate(proj.get_steps()):
+                print(f"{cls.TAB}{f.LIGHTRED_EX}{j}. {step.name}{s.RESET_ALL}")
+        
+                
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='Gitodo')
     sub_parsers = parser.add_subparsers(dest='command')

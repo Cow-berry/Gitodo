@@ -67,10 +67,12 @@ Step:
 	
 # gd today
 	shows current days agenda
-	creates one if none present
+	~~creates one if none present~~ actually just create one immediately upon install
 
 # gd assign <task:USN>
 	adds task to today
+	
+### gd assign 
 	
 # gd done (index:int|<task:USN>)[.(index:int|<subtask:USN>)]
 	marks a (sub)task as done by merging it with `done` branch
