@@ -8,6 +8,7 @@ from task import Category, Project, Step
 
 
 import argparse
+import os
 from colorama import Fore as f
 from colorama import Style as s
 
@@ -103,7 +104,7 @@ class CreateCommand(Command):
         
     @staticmethod
     def create_step(args: argparse.Namespace) -> None:
-        projects: Project | None = Project.get_list_by_name(args.parent)
+        projects: list[Project] = Project.get_list_by_name(args.parent)
         if len(projects) == 0:
             print(f"Project {args.parent} doesn't exist")
             return
@@ -114,20 +115,21 @@ class CreateCommand(Command):
             for i, p in enumerate(projects):
                 print(f"{i}. {p.path_name}")
             while True:
-                i = input(f"Enter number in [0, {len(projects)-1}]: ")
-                if not i.isdecimal():
+                inp = input(f"Enter number in [0, {len(projects)-1}]: ")
+                if not inp.isdecimal():
                     print("Not a number")
                     continue
-                i = int(i)
-                if i < 0 or i >= len(projects):
+                index = int(inp)
+                if index < 0 or index >= len(projects):
                     print("Out of range")
                     continue
                 break
-            proj = projects[i]
+            proj = projects[index]
 
         git.switch(rb.CRAWL)
         git.reset(proj.project_root)
         step_hash = git.commit_hash(args.name)
+        git.notes_add(step_hash, Step(step_hash, f"{proj.path_name}>{args.name}").generate_note())
         new_proj_hash = commit.branch_list_append(proj.hash, step_hash, is_branch=False)
         commit.branch_list_replace(rb.PROJECTS, proj.hash, new_proj_hash)
         
@@ -142,6 +144,29 @@ class CreateCommand(Command):
         elif task_type.startswith('s'):
             cls.create_step(args)
 
+# Todo better formatting
+# Todo grep feature
+# Todo show only children of one categorie
+# Todo show just one project (possibly a separate command)
+class BrowseCommand(Command):
+    command = ["browse", 'b']
+    help = "show all stored tasks"
+    TAB = ' '*2
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        projects: list[Project] = Project.get_existing()
+        projects.sort(key=lambda p: p.parent_category)
+        prev = None
+        for proj in projects:
+            if prev is None or proj.parent_category != prev:
+                cat_name = proj.parent_category.replace('.', ' > ')
+                print(f"{f.LIGHTMAGENTA_EX}{cat_name}{s.RESET_ALL}")
+                prev = proj.parent_category
+            print(f"{cls.TAB}{f.LIGHTCYAN_EX}{proj.name}{s.RESET_ALL}")
+            for i, step in enumerate(proj.get_steps()):
+                print(f"{cls.TAB*2}{f.CYAN}{i}. {step.name}{s.RESET_ALL}")
+            
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='Gitodo')
     sub_parsers = parser.add_subparsers(dest='command')

@@ -69,15 +69,13 @@ display_colour: {self.display_colour}
         return cls(**args)
 
     @classmethod
-    def get_existing(cls) -> list[Self]:
-        tasks = git.get_parents(cls.LIST_BRANCH)[1:]
-        pprint(tasks)
+    def get_existing(cls, hash: str | None = None) -> list[Self]:
+        tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
         return [cls.process_note(hash, note) for hash, note in zip(tasks, git.notes_show_list(tasks))]
 
     @classmethod
     def get_existing_dict(cls) -> dict[str, Self]:
         deb= {task.path_name: task for task in cls.get_existing()}
-        pprint(deb)
         return deb
 
     @classmethod
@@ -101,9 +99,17 @@ class Project(Category):
         super().__init__(*args, **kwargs)
         self.steps = git.get_parents(self.hash)
 
+    def get_steps(self) -> list[Step]:
+        return Step.get_existing(self.hash)
+
     @property
     def name(self) -> str:
         return self.path_name.split('|')[-1]
+
+    @property
+    def parent_category(self) -> str:
+        return self.path_name.split('|')[0]
+
 
     @property
     def project_root(self) -> str:
@@ -111,10 +117,12 @@ class Project(Category):
 
     @classmethod
     def get_list_by_name(cls, name: str) -> list[Self]:
-        return [proj for proj in Project.get_existing() if proj.name == name]
+        return [proj for proj in cls.get_existing() if proj.name == name]
 
 class Step(Category):
-    pass
+    @property
+    def name(self) -> str:
+        return self.path_name.split('>')[-1]
     
 
 def process_colour(colour: str) -> Colour:

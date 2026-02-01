@@ -44,4 +44,4 @@ def run_cmd_(cmd: str, *args,  **kwargs) -> str:
     return run_cmd(cmd.split(), *args, **kwargs)
 
 def get_date(date: str="today") -> str:
-    return run_cmd(['date', '--date', date, '+"%x"'])
+    return run_cmd(['date', '--date', date, '+%x'])

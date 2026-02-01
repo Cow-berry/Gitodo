@@ -16,6 +16,9 @@ class ReservedBranches:
     CRAWL = 'crawl'
     PROJECTS = 'projects'
     DONE = 'done'
+    DAYS_STORAGE = 'days-storage'
+    DAYS = 'days'
+    TODAY = 'today'
 
 rb = ReservedBranches
 
@@ -24,10 +27,16 @@ def install():
     run_cmd(["git",  "init"])
     git.commit("Initial commit")
     git.branch(rb.CRAWL, rb.MAIN)
-    for name in [rb.TASK_STORAGE]:
+    for name in [rb.TASK_STORAGE, rb.DAYS_STORAGE]:
         print(f"{name = }")
         git.branch_switch(name, 'main')
         git.commit(f"{name.capitalize()} start")
+
+    git.switch(rb.DAYS_STORAGE)
+    git.branch_switch(rb.TODAY, rb.DAYS_STORAGE)
+    git.commit(get_date())
+    git.branch_switch(rb.DAYS, rb.TODAY)
+    git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, rb.TODAY], "All days")
 
     git.switch(rb.TASK_STORAGE)
     for name in [rb.CATEGORIES, rb.PROJECTS]:

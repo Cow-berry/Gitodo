@@ -14,13 +14,13 @@ Concrete steps:
 
 --- PROJECT ARENA ------
 
-# gd create (category|project|step) <name:str> [--short-name <short: str>] [--parent <p:USN>] [--focus]
+[d] # gd create (category|project|step) <name:str> [--short-name <short: str>] [--parent <p:USN>] [--focus]
 	creates a task object with <p> parent
     --short-name creates a short name used for indexing
 		*in case if none provided, it's reated from <name>
 	--focus optionally focuses on the specified parent
 	
-### gd create category existing1.existing2.new3.new4
+[d] ### gd create category existing1.existing2.new3.new4
 	- split by .
 	- check in @categories branch for existing ones
 	: for each
@@ -28,13 +28,12 @@ Concrete steps:
 		- add notes for custom names and other fields
 	- remerge-append the new branches into the @categories
 	
-### gd create project -p cat1.cat2.cat3 project
+[d] ### gd create project -p cat1.cat2.cat3 project
 
-### gd create step -p cat1.cat2.cat3.project 
+[d] ### gd create step -p cat1.cat2.cat3.project 
 
 	
-# gd (un)focus <p:USN>
-	makes the `gd create` parent <p> by default 
+	
 	
 # gd edit <USN> [--name <name:str>] [--short-name <name: str>] ..
 	by default just prints the values
