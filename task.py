@@ -55,26 +55,24 @@ class Category:
 
     def generate_note(self) -> str:
         return f"""\
-hash: {self.hash}
 path_name: {self.path_name}
 display_name: {self.display_name}
 display_colour: {self.display_colour}
         """
 
     @classmethod
-    def process_note(cls, note: str) -> Self:
+    def process_note(cls, hash: str, note: str) -> Self:
         lines = [line.split(':', 1) for line in note.split('\n') if ':' in line]
         args = {name.strip(): arg.strip() for name, arg in lines}
+        args.update({'hash': hash})
 
-        if not all([field in args for field in cls.__dataclass_fields__]):
-            raise ParsingException(f"This is not a valid task:\n{note}\n Expected fields: {list(cls.__dataclass_fields__)}")
         return cls(**args)
 
     @classmethod
     def get_existing(cls) -> list[Self]:
         tasks = git.get_parents(cls.LIST_BRANCH)[1:]
         pprint(tasks)
-        return [cls.process_note(note) for note in git.notes_show_list(tasks)]
+        return [cls.process_note(hash, note) for hash, note in zip(tasks, git.notes_show_list(tasks))]
 
     @classmethod
     def get_existing_dict(cls) -> dict[str, Self]:
@@ -85,6 +83,7 @@ display_colour: {self.display_colour}
     @classmethod
     def maybe_get_by_name(cls, name: str) -> Self | None:
         return cls.get_existing_dict().get(name)
+
 
     @classmethod
     def get_by_name(cls, name: str) -> Self:
@@ -104,11 +103,15 @@ class Project(Category):
 
     @property
     def name(self) -> str:
-        return self.path_name.split()[-1]
+        return self.path_name.split('|')[-1]
 
     @property
     def project_root(self) -> str:
         return git.get_parents(self.hash)[0]
+
+    @classmethod
+    def get_list_by_name(cls, name: str) -> list[Self]:
+        return [proj for proj in Project.get_existing() if proj.name == name]
 
 class Step(Category):
     pass

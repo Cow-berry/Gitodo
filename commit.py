@@ -10,20 +10,31 @@ TAB = ' '*3
 # SPECIAL_BRANCHES = ['done', 'finished', 'days', 'last-parent', 'today', 'main', get_date()]
 
 class ReservedBranches:
+    MAIN = 'main'
     TASK_STORAGE = 'task-storage'
     CATEGORIES = 'categories'
     CRAWL = 'crawl'
     PROJECTS = 'projects'
+    DONE = 'done'
 
 rb = ReservedBranches
 
 def install():
+    run_cmd(['rm', '-rf', '.git/'])
     run_cmd(["git",  "init"])
     git.commit("Initial commit")
-    for name in ['task-storage', 'categories', 'projects', 'done', 'day-storage', 'days']:
+    git.branch(rb.CRAWL, rb.MAIN)
+    for name in [rb.TASK_STORAGE]:
         print(f"{name = }")
         git.branch_switch(name, 'main')
-        git.commit(f"{name.capitalize()} parent")
+        git.commit(f"{name.capitalize()} start")
+
+    git.switch(rb.TASK_STORAGE)
+    for name in [rb.CATEGORIES, rb.PROJECTS]:
+        print(f"{name = }")
+        git.branch_switch(name, rb.TASK_STORAGE)
+        git.commit(f"All {name}")
+
 
 class Commit:
     hash: str
@@ -38,7 +49,7 @@ class Commit:
 
 
 # TODO: add note to arguments
-def branch_list_update(branch: str, upd: Callable[[list[str]], list[str]], note: str, is_branch: bool=True) -> str:
+def branch_list_update(branch: str, upd: Callable[[list[str]], list[str]], is_branch: bool=True) -> str:
     prev_parents = upd(git.get_parents(branch))
     prev_hash = git.get_hash(branch)
     prev_subject = git.show(branch, pretty='%s')
@@ -49,8 +60,8 @@ def branch_list_update(branch: str, upd: Callable[[list[str]], list[str]], note:
         git.switch(rb.CRAWL)
     git.reset(f'{branch}~1')
     new_hash = git.merge_pick(prev_hash, prev_parents, prev_subject)
-    git.notes_add(new_hash, note)
-    git.notes_copy(prev_hash, new_hash)
+    if not is_branch:
+        git.notes_copy(prev_hash, new_hash)
     return new_hash
 
 def branch_list_append(branch: str, hash: str, **kwargs) -> str:

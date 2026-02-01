@@ -24,6 +24,15 @@ class Command:
     def run(cls, args: argparse.Namespace) -> None:
         pass
 
+class InstallCommand(Command):
+    command = ['install', 'nuke']
+    help = "Sets up the git environment"
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        commit.install()
+
+
 class CreateCommand(Command):
     command = ['create', 'c']
     help = "Creates a task"
@@ -86,18 +95,35 @@ class CreateCommand(Command):
 
         git.switch(rb.CRAWL)
         git.reset(cat.hash)
-        git.commit(f'{path_name} parent ')
-        hash = git.commit_hash(path_name)
+        git.commit(f'[i] {path_name}')
+        hash = git.commit_hash(f"[t] {path_name}")
         git.notes_add(hash, Project(hash, path_name).generate_note())
 
         commit.branch_list_append(rb.PROJECTS, hash)
         
     @staticmethod
     def create_step(args: argparse.Namespace) -> None:
-        proj: Project | None = Project.maybe_get_by_name(args.parent)
-        if proj is None:
+        projects: Project | None = Project.get_list_by_name(args.parent)
+        if len(projects) == 0:
             print(f"Project {args.parent} doesn't exist")
             return
+        elif len(projects) == 1:
+            proj = projects[0]
+        else:
+            print("Choose one of these projects:")
+            for i, p in enumerate(projects):
+                print(f"{i}. {p.path_name}")
+            while True:
+                i = input(f"Enter number in [0, {len(projects)-1}]: ")
+                if not i.isdecimal():
+                    print("Not a number")
+                    continue
+                i = int(i)
+                if i < 0 or i >= len(projects):
+                    print("Out of range")
+                    continue
+                break
+            proj = projects[i]
 
         git.switch(rb.CRAWL)
         git.reset(proj.project_root)
