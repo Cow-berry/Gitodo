@@ -1,10 +1,10 @@
 import git
-from cmd import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
-from pretty import *
-from commit import Commit, rb
+from run import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
+from commit import Commit, rb, rbl, ListCommit
+from task import Category, Project, Step
+from today import Day, Today
 import commit
 import task
-from task import Category, Project, Step
 
 
 import argparse
@@ -53,79 +53,16 @@ class CreateCommand(Command):
         step.add_argument('name', type=str)
         step.add_argument('--parent', '-p', type=str, required=True)
         
-        # parser.add_argument('task_type', choices=['category', 'c', 'project', 'p', 'step', 's'])
-        # parser.add_argument('name', type=str)
-        # parser.add_argument('--short-name', '-s', type=str, dest='short_name')
-        # parser.add_argument('--parent', '-p', type=str, dest='parent')
-        # parser.add_argument('--focus', '-f', action="store_true", dest='focus')
-
-    @staticmethod
-    def create_category(name: str, silent: bool=False) -> Category:
-        existing_path_names: dict[str, Category] = Category.get_existing_dict()
-
-        category_names: list[str] = name.split('.')
-        category_names = ['.'.join(category_names[:(i+1)]) for i in range(len(category_names))]
-
-        git.switch(rb.CRAWL)
-        prev = None
-        for i, cat in enumerate(category_names):
-            if cat not in existing_path_names:
-                git.reset(prev or rb.TASK_STORAGE)
-                break
-            prev = existing_path_names[cat].hash
-        else:
-            if not silent:
-                print(f"{name} already exists")
-            return existing_path_names[name]
-
-        for category_name in category_names[i:]:
-            hash = git.commit_hash(category_name)
-            git.notes_add(hash, Category(hash, category_name).generate_note())
-            commit.branch_list_append(rb.CATEGORIES, hash)
-            git.switch(rb.CRAWL)
-
-        return Category.get_by_name(name)
-
-    
-
-    @staticmethod
-    def create_project(args: argparse.Namespace) -> None:
-        CreateCommand.create_category(args.parent, silent=True)
-        path_name = f'{args.parent}|{args.name}'
-        cat: Category = Category.get_by_name(args.parent)
-
-        git.switch(rb.CRAWL)
-        git.reset(cat.hash)
-        git.commit(f'[i] {path_name}')
-        hash = git.commit_hash(f"[t] {path_name}")
-        git.notes_add(hash, Project(hash, path_name).generate_note())
-
-        commit.branch_list_append(rb.PROJECTS, hash)
-        
-    @staticmethod
-    def create_step(args: argparse.Namespace) -> None:
-        proj: Project | None = Project.pick_project(args.parent)
-        if proj is None:
-            print(f"Project {args.parent} doesn't exist")
-            return
-
-        git.switch(rb.CRAWL)
-        git.reset(proj.project_root)
-        step_hash = git.commit_hash(args.name)
-        git.notes_add(step_hash, Step(step_hash, f"{proj.path_name}>{args.name}").generate_note())
-        new_proj_hash = commit.branch_list_append(proj.hash, step_hash, is_branch=False)
-        commit.branch_list_replace(rb.PROJECTS, proj.hash, new_proj_hash)
-        
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         task_type: str = args.task_type
         print(f"{args = }")
         if task_type.startswith('c'):
-            cls.create_category(args.name)
+            Category.create(args.name)
         elif task_type.startswith('p'):
-            cls.create_project(args)
+            Project.create(args.name, args.parent)
         elif task_type.startswith('s'):
-            cls.create_step(args)
+            Step.create(args.name, args.parent)
 
 # Todo better formatting
 # Todo grep feature
@@ -139,13 +76,13 @@ class BrowseCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         projects: list[Project] = Project.get_existing()
-        projects.sort(key=lambda p: p.parent_category)
+        projects.sort(key=lambda p: p.path)
         prev = None
         for proj in projects:
-            if prev is None or proj.parent_category != prev:
-                cat_name = proj.parent_category.replace('.', ' > ')
+            if prev is None or proj.category != prev:
+                cat_name = proj.category.replace('.', ' > ')
                 print(f"{f.LIGHTMAGENTA_EX}{cat_name}{s.RESET_ALL}")
-                prev = proj.parent_category
+                prev = proj.category
             print(f"{cls.TAB}{f.LIGHTCYAN_EX}{proj.name}{s.RESET_ALL}")
             for i, step in enumerate(proj.get_steps()):
                 print(f"{cls.TAB*2}{f.CYAN}{i}. {step.name}{s.RESET_ALL}")
@@ -165,11 +102,20 @@ class AssignCommand(Command):
             print(f"Project {args.name} doesn't exist")
             return
 
-        git.switch(rb.TODAY)
-        old_today = git.get_hash(rb.TODAY)
-        new_today = commit.branch_list_append(rb.TODAY, proj.hash)
-        commit.branch_list_replace(rb.DAYS, old_today, new_today)
-
+        today_commit = Commit(rb.TODAY)
+        date = today_commit.subject.split(' ')[-1]
+        const_today = today_commit.parents[0]
+        old_today = today_commit.hash
+        
+        git.switch(rb.CRAWL)
+        git.reset(const_today)
+        task = git.merge_pick(
+            rb.TODAY,
+            [const_today, proj.project_root],
+            f"@ {date} {proj.name}")
+        new_today = rbl.today.append(task)
+        rbl.days.replace(old_today, new_today)
+        
 class TodayCommand(Command):
     command = ["today"]
     help = "Show today's agenda"
@@ -177,11 +123,15 @@ class TodayCommand(Command):
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        projects = Project.get_existing(rb.TODAY)
-        for i, proj in enumerate(projects):
-            print(f"[{i}] {f.RED}{proj.name}{s.RESET_ALL}")
-            for j, step in enumerate(proj.get_steps()):
-                print(f"{cls.TAB}{f.LIGHTRED_EX}{j}. {step.name}{s.RESET_ALL}")
+        print(Today())
+        
+        # tasks = git.get_parents(rb.TODAY)[1:]
+        # tasks = [git.get_parents(task)[1] for task in tasks]
+        # projects = Project.get_by_hashes(tasks)
+        # for i, proj in enumerate(projects):
+        #     print(f"[{i}] {f.RED}{proj.name}{s.RESET_ALL}")
+        #     for j, step in enumerate(proj.get_steps()):
+        #         print(f"{cls.TAB}{f.LIGHTRED_EX}{j}. {step.name}{s.RESET_ALL}")
         
                 
 def setup_parser() -> argparse.ArgumentParser:

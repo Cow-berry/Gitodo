@@ -25,3 +25,4 @@ def rainbow(string: str) -> str:
     ]
 
     return ''.join([f"{style}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
+

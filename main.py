@@ -1,12 +1,11 @@
 import api
-import cmd
+import run
 
 import colorama
 import os
 import sys
 import subprocess
 from typing import Optional, Callable
-import expression as e
             
 
 def maybe_lock_in() -> None:
@@ -26,7 +25,7 @@ def main() -> None:
     
     if 'debug' in args and args.debug:
         print(f"{sys.argv[1:] = }")
-        cmd.RUN_CMD_DEBUG = True
+        run.RUN_CMD_DEBUG = True
         print(f"{args = }")    
         print(f"{cmd_cls = }")
     
@@ -38,5 +37,5 @@ def main() -> None:
     
 if __name__ == "__main__":
     main()
-    os.chdir(cmd.GITODO_DIRECTORY)
+    os.chdir(run.GITODO_DIRECTORY)
     

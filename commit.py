@@ -1,26 +1,13 @@
 import git
 from pretty import *
-from cmd import INSTALLED, run_cmd, get_date
+from run import INSTALLED, run_cmd, get_date
 from git import get_hash
 
-from typing import Optional, Callable
+from typing import Optional, Callable, Self
 
 TAB = ' '*3
 
 # SPECIAL_BRANCHES = ['done', 'finished', 'days', 'last-parent', 'today', 'main', get_date()]
-
-class ReservedBranches:
-    MAIN = 'main'
-    TASK_STORAGE = 'task-storage'
-    CATEGORIES = 'categories'
-    CRAWL = 'crawl'
-    PROJECTS = 'projects'
-    DONE = 'done'
-    DAYS_STORAGE = 'days-storage'
-    DAYS = 'days'
-    TODAY = 'today'
-
-rb = ReservedBranches
 
 def install():
     run_cmd(['rm', '-rf', '.git/'])
@@ -34,7 +21,8 @@ def install():
 
     git.switch(rb.DAYS_STORAGE)
     git.branch_switch(rb.TODAY, rb.DAYS_STORAGE)
-    git.commit(get_date())
+    git.commit(f"[i] {get_date()}")
+    git.commit(f"[m] {get_date()}")
     git.branch_switch(rb.DAYS, rb.TODAY)
     git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, rb.TODAY], "All days")
 
@@ -57,28 +45,56 @@ class Commit:
         self.parents = git.get_parents(self.hash)
 
 
-# TODO: add note to arguments
-def branch_list_update(branch: str, upd: Callable[[list[str]], list[str]], is_branch: bool=True) -> str:
-    prev_parents = upd(git.get_parents(branch))
-    prev_hash = git.get_hash(branch)
-    prev_subject = git.show(branch, pretty='%s')
+class ListCommit(Commit):
+    branch: str
+    
+    def __init__(self, commit_hash: str):
+        super().__init__(commit_hash)
+        self.branch = rb.CRAWL
+    
+    def update(self, upd: Callable[[list[str]], list[str]]) -> str:
+        return git.merge_pick(self.hash, upd(self.parents), self.subject)
+        
+    def append(self, hash: str) -> str:
+        return self.update(lambda l: l + [hash])
 
-    if is_branch:
-        git.switch(branch)
-    else:
-        git.switch(rb.CRAWL)
-    git.reset(f'{branch}~1')
-    new_hash = git.merge_pick(prev_hash, prev_parents, prev_subject)
-    if not is_branch:
-        git.notes_copy(prev_hash, new_hash)
-    return new_hash
+    def remove(self, hash: str) -> str:
+        return self.update(lambda l: l.remove(hash) or l) # type: ignore
 
-def branch_list_append(branch: str, hash: str, **kwargs) -> str:
-    return branch_list_update(branch, lambda l: l + [hash], **kwargs)
+    def replace(self, old_hash: str, new_hash: str) -> str:
+        return self.update(lambda l: [new_hash if x == old_hash else x for x in l])
 
-def branch_list_replace(branch: str, before: str, after: str, **kwargs) -> str:
-    def replace(l: list[str]) -> list[str]:
-        print(f"Replacing in {l}\n{before} -> {after}")
-        l[l.index(before)] = after
-        return l
-    return branch_list_update(branch, replace, **kwargs)
+class ListBranch(ListCommit):
+    def __init__(self, branch_name: str):
+        super().__init__(branch_name)
+        self.branch = branch_name
+
+    def update(self, upd: Callable[[list[str]], list[str]]) -> str:
+        git.switch(self.branch)
+        git.reset(f'{self.branch}~1')
+        return git.merge_pick(self.hash, upd(self.parents), self.subject)
+    
+        
+        
+class ReservedBranches:
+    MAIN = 'main'
+    TASK_STORAGE = 'task-storage'
+    CATEGORIES = 'categories'
+    CRAWL = 'crawl'
+    PROJECTS = 'projects'
+    DONE = 'done'
+    DAYS_STORAGE = 'days-storage'
+    DAYS = 'days'
+    TODAY = 'today'
+
+rb = ReservedBranches
+
+class ReservedBrancheLists:
+    categories: ListBranch
+    projects: ListBranch
+    days: ListBranch
+    today: ListBranch
+    def __getattr__(self, name: str) -> ListBranch:
+        return ListBranch(name)
+
+rbl = ReservedBrancheLists()

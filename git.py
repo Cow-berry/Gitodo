@@ -1,4 +1,4 @@
-from cmd import run_cmd, run_cmd_
+from run import run_cmd, run_cmd_
 
 from typing import Callable
 
