@@ -121,17 +121,36 @@ class TodayCommand(Command):
     help = "Show today's agenda"
     TAB = " "*3
 
+
+    
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         print(Today())
-        
-        # tasks = git.get_parents(rb.TODAY)[1:]
-        # tasks = [git.get_parents(task)[1] for task in tasks]
-        # projects = Project.get_by_hashes(tasks)
-        # for i, proj in enumerate(projects):
-        #     print(f"[{i}] {f.RED}{proj.name}{s.RESET_ALL}")
-        #     for j, step in enumerate(proj.get_steps()):
-        #         print(f"{cls.TAB}{f.LIGHTRED_EX}{j}. {step.name}{s.RESET_ALL}")
+    
+class MarkCommand(Command):
+    command = ["mark"]
+    help = "Mark the progress of a task from agenda"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='mark-type')
+
+        done = subcmds.add_parser('done', aliases=['d'])
+        category.add_argument('task_number', type=int)
+
+        in_progress = subcmds.add_parser('inprogress', aliases=['i'])
+        category.add_argument('task_number', type=int)
+
+        undone = subcmds.add_parser('undone', aliases=['u'])
+        category.add_argument('task_number', type=int)
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        pass
+    # think where to store the mark (note on the task?)
+    # also steps.. are not int, more like 1.3 or something
+    # actually do we really need a done branch... i feel like it's a limitation more than anything
+    # without the done branch, you can just edit any day, by moving the `today` branch to different days and not worry about their order
         
                 
 def setup_parser() -> argparse.ArgumentParser:

@@ -7,6 +7,8 @@ DONE = f"{f.GREEN} ✔ {s.RESET_ALL}"
 IN_PROGRESS = f"{f.LIGHTBLUE_EX} ● {s.RESET_ALL}"
 NOT_DONE = f"{f.RED} ■ {s.RESET_ALL}"
 
+endl = f"{s.RESET_ALL}\n"
+
 def rgb(r: int, g: int, b: int) -> str:
     return f"\x1b[38;2;{r};{g};{b}m"
 
@@ -23,6 +25,7 @@ def rainbow(string: str) -> str:
         f.LIGHTBLUE_EX,
         f.LIGHTMAGENTA_EX
     ]
+    rainbow = [x for c in rainbow for x in [c]*2]
 
     return ''.join([f"{style}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
 

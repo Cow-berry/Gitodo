@@ -4,14 +4,14 @@ from pretty import *
 import git
 
 class Day(ListCommit):
-    TAB = ' '*2 
+    TAB = ' '*2
     
     def __init__(self, hash):
         super().__init__(hash)
 
     @property
     def date(self) -> str:
-        return self.subject.split(' ')[1][:-1]
+        return self.subject.split(' ')[1]
 
     def get_task_hashes(self) -> list[str]:
         return [git.get_parents(task)[1] for task in self.parents[1:]]
@@ -30,11 +30,12 @@ class Day(ListCommit):
         tasks = [Project.get_by_name(name) for name in task_names]
         
         res = rainbow(f"Agenda @ {self.date}:\n")
+        ln = len(str(len(tasks)))
         for i, task in enumerate(tasks):
-            res += f"{f.LIGHTMAGENTA_EX}{i:>2}. {task.name} ({task.category}):{s.RESET_ALL}\n"
+            res += f"{[IN_PROGRESS, DONE][1-i]}{f.LIGHTMAGENTA_EX}[{i:>{ln}}] {task.name} ({task.category}):{s.RESET_ALL}\n"
             steps = task.get_steps()
             for j, step in enumerate(steps):
-                res += f"{self.TAB}{f.LIGHTRED_EX}[{j}] {s.DIM}{step.name}{s.RESET_ALL}\n"
+                res += f"{self.TAB}{f.RED}{j}. {s.BRIGHT}{step.name}{s.RESET_ALL}\n"
         return res
             
         
