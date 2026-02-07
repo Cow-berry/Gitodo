@@ -79,3 +79,33 @@ Step:
 	
 # gd undone --||--
 	unmarks a (sub)task as done by rebasing `done` branch with a custom script that deletes an entry with the specific 
+-------	
+	
+# gd start (starts a timer), allows to make splits at steps, allows to finish and compare time, allows to pause and cancel timer
+	
+--Notes--
+
+
+    /- s1
+proj -- s2
+ |	\-  s3
+ \--	
+    \
+day--task
+
+how do i design task to be persistent to step transpositions
+yet to have marks whether specific steps are done
+
+step hashes are persistent enough
+
+--
+I should either
++ allow to add copies of the same task (and show them properly)
+- disallow adding copies of the same task to the same day
+
+allowing sounds more permissive, and I can actually think of usecases
+that means I need to properly shows doubles [done]
+
+{s1.hash: done, s2.hash: in_progress}
+just add/modify marks. never assume the steps hash is already there, bc user can change the project structure mid-day and introduce new steps
+

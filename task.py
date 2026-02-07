@@ -1,14 +1,19 @@
 import git
+import pretty
 
 from typing import Self, override
 from dataclasses import dataclass
-from commit import rb, rbl, ListCommit
+from commit import rb, rbl, ListCommit, Commit
 from pprint import pprint
+from enum import Enum
 import json
 
 def generate_note(**kwargs) -> str:
     return json.dumps(kwargs)
-    
+
+
+
+
 @dataclass
 class Category:
     hash: str
@@ -38,10 +43,13 @@ class Category:
         tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
         return cls.get_by_hashes(tasks)
 
+    # supposes that tasks have unique names..
+    # deprecated
     @classmethod
     def get_existing_dict(cls) -> dict[str, Self]:
         return {task.name: task for task in cls.get_existing()}
 
+    # deprecated
     @classmethod
     def get_by_name(cls, name: str) -> Self:
         return cls.get_existing_dict()[name]
@@ -101,8 +109,24 @@ class Project(Category):
         return git.get_parents(self.hash)[0]
 
     @classmethod
-    def get_list_by_ame(cls, name: str) -> list[Self]:
+    def get_list_by_name(cls, name: str) -> list[Self]:
         return [proj for proj in cls.get_existing() if proj.name == name]
+
+    @classmethod
+    def get_by_root(cls, hash: str) -> Project:
+        note = git.notes_show(hash)
+        root = cls.process_note(hash, note)
+        proj_list = cls.get_list_by_name(root.name)
+        return [proj for proj in proj_list if proj.project_root][0]
+
+    @classmethod
+    def get_by_roots(cls, hashes: list[str]) -> list[Project]:
+        roots = [cls.process_note(hash, note) for hash, note in zip(hashes, git.notes_show_list_doubles(hashes))]
+        name_proj = {proj.name: proj for proj in cls.get_existing()}
+        return [name_proj[proj.name] for proj in roots]
+        
+        # name_root_dict = {proj.name: proj.hash for proj in roots}
+        # return [proj for proj in cls.get_existing() if proj.name in name_root_dict and proj.project_root == name_root_dict[proj.name]]
 
     @classmethod
     def get_existing(cls, hash: str | None = None) -> list[Self]:
@@ -169,6 +193,69 @@ class Step(Category):
         rbl.projects.replace(proj.hash, new_proj_hash)
 
 
-class ParsingException(Exception):
-    pass
 
+class Mark(Enum):
+    NotDone = 'not done'
+    InProgress = 'in progress'
+    Done = 'done'
+
+    def emoji(self) -> str:
+        match self:
+            case Mark.NotDone:    return pretty.NOT_DONE
+            case Mark.InProgress: return pretty.IN_PROGRESS
+            case Mark.Done:       return pretty.DONE
+        
+
+class MarkedCommit(Commit):
+    mark: Mark
+    
+    def __init__(self, commit_hash: str, mark: Mark):
+        super().__init__(commit_hash)
+        # self.mark = mark
+        # git.notes_add(generate_note(mark))
+
+note = generate_note(mark=Mark.NotDone.name)
+print(f"{note = }")
+unnote = json.loads(note)
+print(f"{unnote = }")
+mark = Mark[unnote['mark']]
+print(f"{mark = }")
+
+
+# TODO: use this class in `Today`
+# implement updating the mark (also think about the steps)
+@dataclass
+class Task:
+    hash: str
+    project: Project
+    mark: Mark
+    
+    def __init__(self, hash):
+        self.hash = hash
+        self.project = Project.get_by_root(hash)
+        self.parse_note()
+
+    def parse_note(self):
+        args = json.loads(git.notes_show(self.hash))
+        self.mark = Mark[args.get('mark')] or Mark.NotDone
+
+
+    def update_note(self):
+        git.notes_add(task, generate_note(mark=self.mark.name))
+        
+    @classmethod
+    def create(cls, proj: Project) -> None:
+        today_commit = Commit(rb.TODAY)
+        date = today_commit.subject.split(' ')[-1]
+        const_today = today_commit.parents[0]
+        old_today = today_commit.hash
+        
+        git.switch(rb.CRAWL)
+        git.reset(const_today)
+        task = git.merge_pick(
+            rb.TODAY,
+            [const_today, proj.project_root],
+            f"@ {date} {proj.name}")
+        git.notes_add(task, generate_note(mark=Mark.NotDone.name))
+        new_today = rbl.today.append(task)
+        rbl.days.replace(old_today, new_today)

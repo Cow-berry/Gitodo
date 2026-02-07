@@ -17,7 +17,7 @@ def maybe_lock_in() -> None:
     
 def main() -> None:
     maybe_lock_in()
-    
+    print(f"{sys.argv[1:] = }")
     parser = api.setup_parser()
     args = parser.parse_args(sys.argv[1:])
 
@@ -25,7 +25,7 @@ def main() -> None:
     
     if 'debug' in args and args.debug:
         print(f"{sys.argv[1:] = }")
-        run.RUN_CMD_DEBUG = True
+        # run.RUN_CMD_DEBUG = True
         print(f"{args = }")    
         print(f"{cmd_cls = }")
     

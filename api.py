@@ -1,7 +1,7 @@
 import git
 from run import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
 from commit import Commit, rb, rbl, ListCommit
-from task import Category, Project, Step
+from task import Category, Project, Step, Task
 from today import Day, Today
 import commit
 import task
@@ -32,7 +32,7 @@ class InstallCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         commit.install()
-
+ 
 
 class CreateCommand(Command):
     command = ['create', 'c']
@@ -102,20 +102,8 @@ class AssignCommand(Command):
             print(f"Project {args.name} doesn't exist")
             return
 
-        today_commit = Commit(rb.TODAY)
-        date = today_commit.subject.split(' ')[-1]
-        const_today = today_commit.parents[0]
-        old_today = today_commit.hash
-        
-        git.switch(rb.CRAWL)
-        git.reset(const_today)
-        task = git.merge_pick(
-            rb.TODAY,
-            [const_today, proj.project_root],
-            f"@ {date} {proj.name}")
-        new_today = rbl.today.append(task)
-        rbl.days.replace(old_today, new_today)
-        
+        Task.create(proj)
+
 class TodayCommand(Command):
     command = ["today"]
     help = "Show today's agenda"
@@ -125,7 +113,32 @@ class TodayCommand(Command):
     
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
+        today_date = Today().date
+        actual_date = get_date()
+
         print(Today())
+        
+        if today_date != actual_date:
+            print(f"Current agenda points to {f.LIGHTRED_EX}{today_date}{s.RESET_ALL}")
+            print(f"But the actual date is {f.LIGHTGREEN_EX}{actual_date}{s.RESET_ALL}")
+            print(f"To switch use the `{f.LIGHTMAGENTA_EX}wake up{s.RESET_ALL}` subcommand")
+            
+class WakeUpCommand(Command):
+    command = ["wakeup"]
+    help = "Update the agenda to show the curret day"
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        date = get_date()
+        prev_date = Today().date
+        if date == prev_date:
+            print(f"Already on {date}")
+            return
+        git.switch_reset(rb.TODAY, rb.DAYS_STORAGE)
+        git.commit(f"[i] {date}")
+        git.commit(f"[m] {date}")
+        rbl.days.append(rb.TODAY)
+        
     
 class MarkCommand(Command):
     command = ["mark"]
@@ -136,21 +149,23 @@ class MarkCommand(Command):
         subcmds = parser.add_subparsers(dest='mark-type')
 
         done = subcmds.add_parser('done', aliases=['d'])
-        category.add_argument('task_number', type=int)
+        done.add_argument('task_number', type=int)
 
         in_progress = subcmds.add_parser('inprogress', aliases=['i'])
-        category.add_argument('task_number', type=int)
+        in_progress.add_argument('task_number', type=int)
 
         undone = subcmds.add_parser('undone', aliases=['u'])
-        category.add_argument('task_number', type=int)
+        undone.add_argument('task_number', type=int)
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
+        
         pass
     # think where to store the mark (note on the task?)
     # also steps.. are not int, more like 1.3 or something
     # actually do we really need a done branch... i feel like it's a limitation more than anything
-    # without the done branch, you can just edit any day, by moving the `today` branch to different days and not worry about their order
+    # without the done branch, you can jst edit any day, by moving the `today` branch to different days and not worry about their order
+    # upd: yes, but also having one list commit as undo can help for statistics, so we're doing that too
         
                 
 def setup_parser() -> argparse.ArgumentParser:

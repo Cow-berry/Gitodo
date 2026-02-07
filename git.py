@@ -55,6 +55,11 @@ def reset(node: str, mode: str = '--mixed') -> None:
     
     run_cmd(['git', 'reset', mode, node])
 
+def switch_reset(switch_branch: str, reset_branch: str) -> None:
+    switch(switch_branch)
+    reset(reset_branch)
+
+# todo remove
 def reset_branch(b_from: str, b_to: str, *args, **kwargs) -> None:
     switch(b_from)
     reset(b_to, *args, **kwargs)
@@ -114,6 +119,9 @@ def notes_show(hash: str) -> str:
 def notes_show_list(hashes: list[str]) -> list[str]:
     if not hashes: return []
     return show(hashes, pretty="%N").split('\n\n')
+
+def notes_show_list_doubles(hashes: list[str]) -> list[str]:
+    return [notes_show(hash) for hash in hashes]
 
 def notes_add(hash: str, note: str) -> None:
     run_cmd(['git', 'notes', 'add', '-fm', note, hash])

@@ -18,7 +18,7 @@ class Day(ListCommit):
 
 
     def get_tasks(self) -> list[Project]:
-        return Project.get_by_hashes(self.get_task_hashes())
+        return Project.get_by_roots(self.get_task_hashes())
 
     def __contains__(self, item) -> bool:
         return item in self.get_task_hashes()        
@@ -26,9 +26,6 @@ class Day(ListCommit):
     # formats the list for `today` command
     def __str__(self) -> str:
         tasks = self.get_tasks() # raw projects without steps
-        task_names = [task.name for task in tasks]
-        tasks = [Project.get_by_name(name) for name in task_names]
-        
         res = rainbow(f"Agenda @ {self.date}:\n")
         ln = len(str(len(tasks)))
         for i, task in enumerate(tasks):
