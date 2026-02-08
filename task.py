@@ -1,5 +1,6 @@
 import git
 import pretty
+from pretty import *
 
 from typing import Self, override
 from dataclasses import dataclass
@@ -204,7 +205,13 @@ class Mark(Enum):
             case Mark.NotDone:    return pretty.NOT_DONE
             case Mark.InProgress: return pretty.IN_PROGRESS
             case Mark.Done:       return pretty.DONE
-        
+
+    @property
+    def colour(self) -> str:
+        match self:
+            case Mark.NotDone:    return f.LIGHTRED_EX
+            case Mark.InProgress: return f.LIGHTBLUE_EX
+            case Mark.Done:       return f.LIGHTGREEN_EX
 
 class MarkedCommit(Commit):
     mark: Mark
@@ -222,13 +229,15 @@ mark = Mark[unnote['mark']]
 print(f"{mark = }")
 
 
-# TODO: use this class in `Today`
-# implement updating the mark (also think about the steps)
+# TODO: implement api command updating marks on tasks and steps
+# make sure only one task can be in progress, but you can complete steps in any order
+# NotDone project can have Done steps (maybe show percentage and/or progress bar)
 @dataclass
 class Task:
     hash: str
     project: Project
     mark: Mark
+    step_marks: dict[str, Mark] # step hash -> mark
     
     def __init__(self, hash):
         self.hash = hash
@@ -237,11 +246,32 @@ class Task:
 
     def parse_note(self):
         args = json.loads(git.notes_show(self.hash))
-        self.mark = Mark[args.get('mark')] or Mark.NotDone
+        mark_name = args.get('mark', Mark.NotDone.name)
+        self.mark = Mark[mark_name]
+        step_marks = args.get('step_marks', dict())
+        self.step_marks = {hash: Mark[step_marks[hash]] for hash in step_marks}
 
 
     def update_note(self):
-        git.notes_add(task, generate_note(mark=self.mark.name))
+        git.notes_add(task, generate_note(
+            mark=self.mark.name,
+            step_marks={hash: self.step_marks[hash].name for hash in self.step_marks}
+        ))
+
+    @property
+    def name(self) -> str:
+        return self.project.name
+
+    @property
+    def category(self) -> str:
+        return self.project.category
+
+    def get_steps(self) -> list[TaskStep]:
+        steps: list[Step] = self.project.get_steps()
+        return [TaskStep(step, self.step_marks.get(step.hash, Mark.NotDone)) for step in steps]
+        
+
+    
         
     @classmethod
     def create(cls, proj: Project) -> None:
@@ -259,3 +289,17 @@ class Task:
         git.notes_add(task, generate_note(mark=Mark.NotDone.name))
         new_today = rbl.today.append(task)
         rbl.days.replace(old_today, new_today)
+
+@dataclass
+class TaskStep:
+    step: Step
+    mark: Mark
+    
+    def __init__(self, step: Step, mark: Mark):
+        self.step = step
+        self.mark = mark
+
+    @property
+    def name(self) -> str:
+        return self.step.name
+    

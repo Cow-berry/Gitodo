@@ -1,5 +1,5 @@
 from commit import ListCommit, ListBranch, rb
-from task import Project
+from task import Project, Task
 from pretty import *
 import git
 
@@ -18,21 +18,22 @@ class Day(ListCommit):
 
 
     def get_tasks(self) -> list[Project]:
-        return Project.get_by_roots(self.get_task_hashes())
+        return [Task(hash) for hash in self.get_task_hashes()]
+        # return Project.get_by_roots(self.get_task_hashes())
 
     def __contains__(self, item) -> bool:
         return item in self.get_task_hashes()        
 
     # formats the list for `today` command
     def __str__(self) -> str:
-        tasks = self.get_tasks() # raw projects without steps
+        tasks: list[Task] = self.get_tasks() # raw projects without steps
         res = rainbow(f"Agenda @ {self.date}:\n")
-        ln = len(str(len(tasks)))
+        ln = len(str(len(tasks)-1))
         for i, task in enumerate(tasks):
-            res += f"{[IN_PROGRESS, DONE][1-i]}{f.LIGHTMAGENTA_EX}[{i:>{ln}}] {task.name} ({task.category}):{s.RESET_ALL}\n"
+            res += f"{task.mark.emoji()}[{i:>{ln}}] {task.name} {rgb(*[160]*3)}({task.category}):{endl}"
             steps = task.get_steps()
             for j, step in enumerate(steps):
-                res += f"{self.TAB}{f.RED}{j}. {s.BRIGHT}{step.name}{s.RESET_ALL}\n"
+                res += f"{self.TAB}{step.mark.colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
         return res
             
         

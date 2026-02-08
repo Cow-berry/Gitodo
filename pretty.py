@@ -3,9 +3,7 @@ from colorama import Style as s
 import colorama
 import itertools
 
-DONE = f"{f.GREEN} ✔ {s.RESET_ALL}"
-IN_PROGRESS = f"{f.LIGHTBLUE_EX} ● {s.RESET_ALL}"
-NOT_DONE = f"{f.RED} ■ {s.RESET_ALL}"
+
 
 endl = f"{s.RESET_ALL}\n"
 
@@ -29,3 +27,6 @@ def rainbow(string: str) -> str:
 
     return ''.join([f"{style}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
 
+DONE = f"{rgb(0,255,0)} ✔ {s.RESET_ALL}"
+IN_PROGRESS = f"{rgb(0,0,255)} ● {s.RESET_ALL}"
+NOT_DONE = f"{rgb(255,0,0)} ■ {s.RESET_ALL}"
