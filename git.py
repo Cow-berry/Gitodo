@@ -114,7 +114,7 @@ def show_debug(hashes: list[str]) -> list[str]:
     return hashes
 
 def notes_show(hash: str) -> str:
-    return run_cmd(['git', 'notes', 'show', hash])
+    return run_cmd(['git', 'notes', 'show', hash], do_raise=False)
 
 def notes_show_list(hashes: list[str]) -> list[str]:
     if not hashes: return []

@@ -5,6 +5,7 @@ from task import Category, Project, Step, Task
 from today import Day, Today
 import commit
 import task
+from task import Mark
 
 
 import argparse
@@ -105,7 +106,7 @@ class AssignCommand(Command):
         Task.create(proj)
 
 class TodayCommand(Command):
-    command = ["today"]
+    command = ["today", 't']
     help = "Show today's agenda"
     TAB = " "*3
 
@@ -141,26 +142,31 @@ class WakeUpCommand(Command):
         
     
 class MarkCommand(Command):
-    command = ["mark"]
+    command = ["mark", 'm']
     help = "Mark the progress of a task from agenda"
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        subcmds = parser.add_subparsers(dest='mark-type')
-
-        done = subcmds.add_parser('done', aliases=['d'])
-        done.add_argument('task_number', type=int)
-
-        in_progress = subcmds.add_parser('inprogress', aliases=['i'])
-        in_progress.add_argument('task_number', type=int)
-
-        undone = subcmds.add_parser('undone', aliases=['u'])
-        undone.add_argument('task_number', type=int)
+        parser.add_argument('mark_type', choices=['done', 'inprogress', 'undone', *'diu'])
+        parser.add_argument('task_id', type=int)
+        parser.add_argument('-s', type=int, required=False, dest='step_id')
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        
-        pass
+        if args.mark_type.startswith('d'):
+            mark = Mark.Done
+        elif args.mark_type.startswith('i'):
+            mark = Mark.InProgress
+        else:
+            mark = Mark.NotDone
+
+        task = Today().get_task_by_num(args.task_id)
+        if args.step_id is None:
+            task.set_mark(mark)
+            return
+
+        step = task.get_steps()[args.step_id]
+        step.set_mark(mark)
     # think where to store the mark (note on the task?)
     # also steps.. are not int, more like 1.3 or something
     # actually do we really need a done branch... i feel like it's a limitation more than anything

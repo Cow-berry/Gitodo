@@ -44,11 +44,15 @@ class Category:
         tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
         return cls.get_by_hashes(tasks)
 
+    @classmethod
+    def get_list_by_name(cls, path_name: str) -> list[Self]:
+        return [cat for cat in cls.get_existing() if cat.path_name == path_name]
+    
     # supposes that tasks have unique names..
     # deprecated
     @classmethod
     def get_existing_dict(cls) -> dict[str, Self]:
-        return {task.name: task for task in cls.get_existing()}
+        return {task.path: task for task in cls.get_existing()}
 
     # deprecated
     @classmethod
@@ -96,7 +100,7 @@ class Project(Category):
     LIST_BRANCH = rb.PROJECTS
     DELIMITER = ""
 
-    def __init__(self, hash: str, category: str, name: str, **kwargs):
+    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", **kwargs):
         self.hash = hash
         self.category = category
         self.name = name
@@ -209,9 +213,9 @@ class Mark(Enum):
     @property
     def colour(self) -> str:
         match self:
-            case Mark.NotDone:    return f.LIGHTRED_EX
-            case Mark.InProgress: return f.LIGHTBLUE_EX
-            case Mark.Done:       return f.LIGHTGREEN_EX
+            case Mark.NotDone:    return rgb(200, 50, 50)
+            case Mark.InProgress: return rgb(0, 255, 255)
+            case Mark.Done:       return rgb(50, 255, 50)
 
 class MarkedCommit(Commit):
     mark: Mark
@@ -220,13 +224,6 @@ class MarkedCommit(Commit):
         super().__init__(commit_hash)
         # self.mark = mark
         # git.notes_add(generate_note(mark))
-
-note = generate_note(mark=Mark.NotDone.name)
-print(f"{note = }")
-unnote = json.loads(note)
-print(f"{unnote = }")
-mark = Mark[unnote['mark']]
-print(f"{mark = }")
 
 
 # TODO: implement api command updating marks on tasks and steps
@@ -241,11 +238,11 @@ class Task:
     
     def __init__(self, hash):
         self.hash = hash
-        self.project = Project.get_by_root(hash)
+        self.project = Project.get_by_root(git.get_parents(hash)[1])
         self.parse_note()
 
     def parse_note(self):
-        args = json.loads(git.notes_show(self.hash))
+        args = json.loads(git.notes_show(self.hash) or '{}')
         mark_name = args.get('mark', Mark.NotDone.name)
         self.mark = Mark[mark_name]
         step_marks = args.get('step_marks', dict())
@@ -253,10 +250,14 @@ class Task:
 
 
     def update_note(self):
-        git.notes_add(task, generate_note(
+        git.notes_add(self.hash, generate_note(
             mark=self.mark.name,
             step_marks={hash: self.step_marks[hash].name for hash in self.step_marks}
         ))
+
+    def set_mark(self, mark: Mark):
+        self.mark = mark
+        self.update_note()
 
     @property
     def name(self) -> str:
@@ -268,7 +269,7 @@ class Task:
 
     def get_steps(self) -> list[TaskStep]:
         steps: list[Step] = self.project.get_steps()
-        return [TaskStep(step, self.step_marks.get(step.hash, Mark.NotDone)) for step in steps]
+        return [TaskStep(self, step, self.step_marks.get(step.hash, Mark.NotDone)) for step in steps]
         
 
     
@@ -292,14 +293,22 @@ class Task:
 
 @dataclass
 class TaskStep:
+    task: Task
     step: Step
     mark: Mark
     
-    def __init__(self, step: Step, mark: Mark):
+    def __init__(self, task: Task, step: Step, mark: Mark):
+        self.task = task
         self.step = step
         self.mark = mark
 
     @property
     def name(self) -> str:
         return self.step.name
+
+    def set_mark(self, mark: Mark):
+        self.task.step_marks[self.step.hash] = mark
+        self.task.update_note()
+
+    
     

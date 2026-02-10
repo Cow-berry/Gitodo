@@ -1,5 +1,5 @@
 from commit import ListCommit, ListBranch, rb
-from task import Project, Task
+from task import Project, Task, Mark
 from pretty import *
 import git
 
@@ -14,12 +14,16 @@ class Day(ListCommit):
         return self.subject.split(' ')[1]
 
     def get_task_hashes(self) -> list[str]:
-        return [git.get_parents(task)[1] for task in self.parents[1:]]
+        return self.parents[1:]
+        # return [git.get_parents(task)[1] for task in self.parents[1:]]
 
 
     def get_tasks(self) -> list[Project]:
         return [Task(hash) for hash in self.get_task_hashes()]
         # return Project.get_by_roots(self.get_task_hashes())
+
+    def get_task_by_num(self, n: int) -> Task:
+        return self.get_tasks()[n]
 
     def __contains__(self, item) -> bool:
         return item in self.get_task_hashes()        
@@ -30,10 +34,13 @@ class Day(ListCommit):
         res = rainbow(f"Agenda @ {self.date}:\n")
         ln = len(str(len(tasks)-1))
         for i, task in enumerate(tasks):
-            res += f"{task.mark.emoji()}[{i:>{ln}}] {task.name} {rgb(*[160]*3)}({task.category}):{endl}"
+            res += f"{task.mark.emoji()}{task.mark.colour}[{i:>{ln}}] {task.name} {rgb(*[160]*3)}({task.category}):{endl}"
             steps = task.get_steps()
+            override_mark = None
+            if task.mark == Mark.Done:
+                override_mark = Mark.Done
             for j, step in enumerate(steps):
-                res += f"{self.TAB}{step.mark.colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
+                res += f"{self.TAB}{ (override_mark or step.mark).colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
         return res
             
         

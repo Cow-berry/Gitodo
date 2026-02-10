@@ -34,8 +34,8 @@ def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedP
         raise RunException(f"# Failed to execute {cmd}:\n{proc.stderr}") # type: ignore
     return proc
 
-def run_cmd(cmd: list[str]) -> str:
-    return run_cmd_proc(cmd).stdout
+def run_cmd(cmd: list[str], *args, **kwargs) -> str:
+    return run_cmd_proc(cmd, *args, **kwargs).stdout
 
 def run_cmd_if(cmd: list[str], *args, **kwargs) -> bool:
     return run_cmd_proc(cmd, *args, **kwargs).returncode == 0
