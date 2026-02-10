@@ -46,7 +46,7 @@ class Category:
 
     @classmethod
     def get_list_by_name(cls, path_name: str) -> list[Self]:
-        return [cat for cat in cls.get_existing() if cat.path_name == path_name]
+        return [cat for cat in cls.get_existing() if cat.path == path_name]
     
     # supposes that tasks have unique names..
     # deprecated
@@ -62,6 +62,30 @@ class Category:
     @classmethod
     def exists(cls, name: str) -> bool:
         return name in cls.get_existing_dict()
+
+    @classmethod
+    def pick(cls, name: str) -> Self | None:
+        tasks: list[Self] = cls.get_list_by_name(name)
+        if len(tasks) == 0:
+            return None
+        elif len(tasks) == 1:
+            return tasks[0]
+        
+        print("Choose one from this list:")
+        for i, p in enumerate(tasks):
+            print(f"{i}. {p.path}")
+            
+        while True:
+            inp = input(f"Enter number in [0, {len(tasks)-1}]: ")
+            if not inp.isdecimal():
+                print("Not a number")
+                continue
+            index = int(inp)
+            if index < 0 or index >= len(tasks):
+                print("Out of range")
+                continue
+            break
+        return tasks[index]
 
     @classmethod
     def get_or_create(cls, name: str, *args) -> Self:
@@ -138,7 +162,8 @@ class Project(Category):
         tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
         task_notes = [git.get_parents(task)[0] for task in tasks]
         return [cls.process_note(hash, note) for hash, note in zip(tasks, git.notes_show_list(task_notes))]
-    
+
+    # deprecated
     @classmethod
     def pick_project(cls, name: str) -> Project | None:
         projects: list[Project] = Project.get_list_by_name(name)

@@ -24,6 +24,10 @@ class Command:
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
+        cls.run_()
+
+    @classmethod
+    def run_(cls) -> None:
         pass
 
 class InstallCommand(Command):
@@ -57,13 +61,68 @@ class CreateCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         task_type: str = args.task_type
-        print(f"{args = }")
         if task_type.startswith('c'):
             Category.create(args.name)
         elif task_type.startswith('p'):
             Project.create(args.name, args.parent)
         elif task_type.startswith('s'):
             Step.create(args.name, args.parent)
+
+class RemoveCommand(Command):
+    command = ['remove', 'r']
+    help = "Remove a task"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='task_type')
+
+        category = subcmds.add_parser('category', aliases=['c'])
+        category.add_argument('name', type=str)
+
+        project = subcmds.add_parser('project', aliases=['p'])
+        project.add_argument('name', type=str)
+
+        step = subcmds.add_parser('step', aliases=['s'])
+        step.add_argument('step_id', type=str)
+        step.add_argument('--parent', '-p', type=str, required=True)
+
+
+    # Removing a project should make it still readable, but archived (and maybe restorable)
+    # Removing a category should be reflected in the browse command (project that are inside the removed category also need to removed (maybe with a warning)
+    # Steps can go to hell
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        task_type: str = args.task_type
+        if task_type == 'c': task_type = 'category'
+        if task_type == 'p': task_type = 'project'
+        
+        if task_type in ['category', 'project']:
+            is_cat = task_type == 'category'
+            cls = Category if is_cat else Project
+            branch_list = rbl.categories if is_cat else rbl.projects
+            
+            obj: Category | None = cls.pick(args.name)
+            if obj is None:
+                print(f"No {task_type} with name {args.name} exists")
+                return
+            branch_list.remove(obj.hash)
+            return
+
+        # removing a step:
+        proj: Project | None = Project.pick(args.parent)
+        if proj is None:
+            print(f"No project with name {args.parent} exists")
+            return
+        step = proj.get_steps()[args.step_id]
+        new_proj_hash = ListCommit(proj.hash).remove(step.hash)
+        rbl.projects.replace(proj.hash, new_proj_hash)
+        
+            
+
+
+
+    
+    
 
 # Todo better formatting
 # Todo grep feature
@@ -89,12 +148,13 @@ class BrowseCommand(Command):
                 print(f"{cls.TAB*2}{f.CYAN}{i}. {step.name}{s.RESET_ALL}")
 
 class AssignCommand(Command):
-    command = ["assign"]
+    command = ["assign", 'a']
     help = "Assign a task to today's agenda"
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument('name', type=str)
+        parser.add_argument('--show', action='store_true')
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
@@ -104,7 +164,25 @@ class AssignCommand(Command):
             return
 
         Task.create(proj)
+        if args.show:
+            TodayCommand.run_()
 
+class UnassignCommand(Command):
+    command = ["unassign"]
+    help = "Unassign a task from today's agenda"
+    
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('task_id', type=int)
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        task = Today().get_task_by_num(args.task_id)
+        parents = git.get_parents(rb.TODAY)
+        if task.hash not in parents[1:] and task.hash != parents[0]:
+            return
+        rbl.today.remove(task.hash)        
+    
 class TodayCommand(Command):
     command = ["today", 't']
     help = "Show today's agenda"
@@ -113,7 +191,7 @@ class TodayCommand(Command):
 
     
     @classmethod
-    def run(cls, args: argparse.Namespace) -> None:
+    def run_(cls) -> None:
         today_date = Today().date
         actual_date = get_date()
 
@@ -122,7 +200,7 @@ class TodayCommand(Command):
         if today_date != actual_date:
             print(f"Current agenda points to {f.LIGHTRED_EX}{today_date}{s.RESET_ALL}")
             print(f"But the actual date is {f.LIGHTGREEN_EX}{actual_date}{s.RESET_ALL}")
-            print(f"To switch use the `{f.LIGHTMAGENTA_EX}wake up{s.RESET_ALL}` subcommand")
+            print(f"To switch use the `{f.LIGHTMAGENTA_EX}wakeup{s.RESET_ALL}` subcommand")
             
 class WakeUpCommand(Command):
     command = ["wakeup"]
@@ -150,6 +228,7 @@ class MarkCommand(Command):
         parser.add_argument('mark_type', choices=['done', 'inprogress', 'undone', *'diu'])
         parser.add_argument('task_id', type=int)
         parser.add_argument('-s', type=int, required=False, dest='step_id')
+        parser.add_argument('--show', action='store_true')
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
@@ -160,13 +239,23 @@ class MarkCommand(Command):
         else:
             mark = Mark.NotDone
 
+        if mark == Mark.InProgress:
+            tasks = Today().get_tasks()
+            for task in tasks:
+                if task.mark == Mark.InProgress:
+                    task.set_mark(Mark.NotDone)
+            
         task = Today().get_task_by_num(args.task_id)
         if args.step_id is None:
             task.set_mark(mark)
-            return
+        else:
+            step = task.get_steps()[args.step_id]
+            step.set_mark(mark)
 
-        step = task.get_steps()[args.step_id]
-        step.set_mark(mark)
+            
+
+        if args.show:
+            TodayCommand.run_()
     # think where to store the mark (note on the task?)
     # also steps.. are not int, more like 1.3 or something
     # actually do we really need a done branch... i feel like it's a limitation more than anything

@@ -18,7 +18,7 @@ class Day(ListCommit):
         # return [git.get_parents(task)[1] for task in self.parents[1:]]
 
 
-    def get_tasks(self) -> list[Project]:
+    def get_tasks(self) -> list[Task]:
         return [Task(hash) for hash in self.get_task_hashes()]
         # return Project.get_by_roots(self.get_task_hashes())
 
