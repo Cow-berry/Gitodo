@@ -53,7 +53,7 @@ class ListCommit(Commit):
         self.branch = rb.CRAWL
     
     def update(self, upd: Callable[[list[str]], list[str]]) -> str:
-        return git.merge_pick(self.hash, upd(self.parents), self.subject)
+        return git.merge_pick(self.hash, upd(self.parents), self.subject, merge=False)
         
     def append(self, hash: str) -> str:
         return self.update(lambda l: l + [hash])
@@ -70,9 +70,12 @@ class ListBranch(ListCommit):
         self.branch = branch_name
 
     def update(self, upd: Callable[[list[str]], list[str]]) -> str:
+        # git.reset(git.get_parents(self.branch)[0])
+        # git.reset(f'{self.branch}~1')
+        new_hash = git.merge_pick(self.hash, upd(self.parents), self.subject, merge=False)
         git.switch(self.branch)
-        git.reset(f'{self.branch}~1')
-        return git.merge_pick(self.hash, upd(self.parents), self.subject)
+        git.reset(new_hash)
+        return new_hash
     
         
         

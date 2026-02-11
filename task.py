@@ -29,6 +29,9 @@ class Category:
         self.path = path
         self.name = self.path.split('.')[-1]
 
+    def __str__(self) -> str:
+        return f"{f.LIGHTYELLOW_EX}{self.name} ({self.path}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
+
     @classmethod
     def process_note(cls, hash: str, note: str) -> Self:
         args = json.loads(note)
@@ -45,8 +48,8 @@ class Category:
         return cls.get_by_hashes(tasks)
 
     @classmethod
-    def get_list_by_name(cls, path_name: str) -> list[Self]:
-        return [cat for cat in cls.get_existing() if cat.path == path_name]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b) -> list[Self]:
+        return [task for task in cls.get_existing() if cond(path_name, task.path)]
     
     # supposes that tasks have unique names..
     # deprecated
@@ -64,8 +67,8 @@ class Category:
         return name in cls.get_existing_dict()
 
     @classmethod
-    def pick(cls, name: str) -> Self | None:
-        tasks: list[Self] = cls.get_list_by_name(name)
+    def pick(cls, name: str, **kwargs) -> Self | None:
+        tasks: list[Self] = cls.get_list_by_name(name, **kwargs)
         if len(tasks) == 0:
             return None
         elif len(tasks) == 1:
@@ -73,10 +76,13 @@ class Category:
         
         print("Choose one from this list:")
         for i, p in enumerate(tasks):
-            print(f"{i}. {p.path}")
+            print(f"- [{i}] {p}")
             
         while True:
-            inp = input(f"Enter number in [0, {len(tasks)-1}]: ")
+            inp = input(f"Enter number in [0, {len(tasks)-1}] or q(uit): ")
+            if inp == 'q' or inp == 'quit':
+                print("Exiting")
+                return None
             if not inp.isdecimal():
                 print("Not a number")
                 continue
@@ -86,6 +92,16 @@ class Category:
                 continue
             break
         return tasks[index]
+
+    @classmethod
+    def partial_pick(cls, search: str) -> Self | None:
+        return cls.pick(search, cond=lambda search, path: search in path)
+
+    @classmethod
+    def full_pick(cls, name: str | None, search: str | None) -> Self | None:
+        if name is not None:
+            return cls.pick(name)
+        return cls.partial_pick(search)
 
     @classmethod
     def get_or_create(cls, name: str, *args) -> Self:
@@ -119,6 +135,7 @@ class Category:
 class Project(Category):
     steps: list[str]
     category: str
+    archived: bool
     
     COLOUR = "100"
     LIST_BRANCH = rb.PROJECTS
@@ -130,6 +147,9 @@ class Project(Category):
         self.name = name
         self.path = f"{category}>>>{name}"
 
+    def __str__(self) -> str:
+        return f"{s.BRIGHT}{f.LIGHTYELLOW_EX}{self.name}{s.NORMAL} ({self.category}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
+
     def get_steps(self) -> list[Step]:
         return Step.get_existing(self.hash)
 
@@ -137,10 +157,14 @@ class Project(Category):
     def project_root(self) -> str:
         return git.get_parents(self.hash)[0]
 
-    @classmethod
-    def get_list_by_name(cls, name: str) -> list[Self]:
-        return [proj for proj in cls.get_existing() if proj.name == name]
+    # @classmethod
+    # def get_list_by_name(cls, name: str) -> list[Self]:
+    #     return [proj for proj in cls.get_existing() if proj.name == name]
 
+    @classmethod
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b) -> list[Self]:
+        return [task for task in cls.get_existing() if cond(path_name, task.name)]
+    
     @classmethod
     def get_by_root(cls, hash: str) -> Project:
         note = git.notes_show(hash)
@@ -212,9 +236,9 @@ class Step(Category):
         self.path = f"{category}>>>{project}>>{name}"
     
     @classmethod
-    def create(cls, name: str, parent: str) -> None:
-        proj = Project.pick_project(parent)
-        if proj is None: return
+    def create(cls, name: str, proj: Project) -> None:
+        # proj = Project.pick_project(parent)
+        # if proj is None: return
         git.switch(rb.CRAWL)
         git.reset(proj.project_root)
         step_hash = git.commit_hash(name)

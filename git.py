@@ -36,7 +36,7 @@ def get_hash(hash: str) -> str:
     return show(hash, pretty="%H")
 
 def get_subject(hash: str) -> str:
-    return git.show(hash, pretty="%s")
+    return show(hash, pretty="%s")
 
 def switch(node: str) -> None:
     node = _fix_name(node)

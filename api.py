@@ -56,7 +56,9 @@ class CreateCommand(Command):
 
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('name', type=str)
-        step.add_argument('--parent', '-p', type=str, required=True)
+        name = step.add_mutually_exclusive_group(required=True)
+        name.add_argument('--partial-parent', '-r', type=str, dest='part')
+        name.add_argument('--parent', '-p', type=str)
         
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
@@ -66,7 +68,11 @@ class CreateCommand(Command):
         elif task_type.startswith('p'):
             Project.create(args.name, args.parent)
         elif task_type.startswith('s'):
-            Step.create(args.name, args.parent)
+            proj = Project.full_pick(args.parent, args.part)
+            if proj is None:
+                print("No such project found")
+                return
+            Step.create(args.name, proj)
 
 class RemoveCommand(Command):
     command = ['remove', 'r']
@@ -83,10 +89,26 @@ class RemoveCommand(Command):
         project.add_argument('name', type=str)
 
         step = subcmds.add_parser('step', aliases=['s'])
-        step.add_argument('step_id', type=str)
-        step.add_argument('--parent', '-p', type=str, required=True)
+        step.add_argument('step_id', type=int)
+        name = step.add_mutually_exclusive_group(required=True)
+        name.add_argument('--partial-parent', '-r', type=str, dest='part')
+        name.add_argument('--parent', '-p', type=str)
 
 
+    @staticmethod
+    def remove_step(proj: Project, id: int) -> None:
+        step = proj.get_steps()[id]
+        new_proj_hash = ListCommit(proj.hash).remove(step.hash)
+        rbl.projects.replace(proj.hash, new_proj_hash)
+
+    @staticmethod
+    def remove_project(proj: Project) -> None:
+        pass
+
+    @staticmethod
+    def remove_category(name: str) -> None:
+        pass
+    
     # Removing a project should make it still readable, but archived (and maybe restorable)
     # Removing a category should be reflected in the browse command (project that are inside the removed category also need to removed (maybe with a warning)
     # Steps can go to hell
@@ -95,27 +117,35 @@ class RemoveCommand(Command):
         task_type: str = args.task_type
         if task_type == 'c': task_type = 'category'
         if task_type == 'p': task_type = 'project'
+        if task_type == 's': task_type = 'step'
         
-        if task_type in ['category', 'project']:
-            is_cat = task_type == 'category'
-            cls = Category if is_cat else Project
-            branch_list = rbl.categories if is_cat else rbl.projects
+        # if task_type in ['category', 'project']:
+        #     is_cat = task_type == 'category'
+        #     cls = Category if is_cat else Project
+        #     branch_list = rbl.categories if is_cat else rbl.projects
             
-            obj: Category | None = cls.pick(args.name)
-            if obj is None:
-                print(f"No {task_type} with name {args.name} exists")
-                return
-            branch_list.remove(obj.hash)
-            return
+        #     obj: Category | None = cls.pick(args.name)
+        #     if obj is None:
+        #         print(f"No {task_type} with name {args.name} exists")
+        #         return
+        #     branch_list.remove(obj.hash)
+        #     return
 
-        # removing a step:
-        proj: Project | None = Project.pick(args.parent)
-        if proj is None:
-            print(f"No project with name {args.parent} exists")
-            return
-        step = proj.get_steps()[args.step_id]
-        new_proj_hash = ListCommit(proj.hash).remove(step.hash)
-        rbl.projects.replace(proj.hash, new_proj_hash)
+        if task_type == 'step':
+            proj = Project.full_pick(args.parent, args.part)
+            if proj is None:
+                print("No such project found")
+                return
+            cls.remove_step(proj, args.step_id)
+        elif task_type == 'project':
+            proj = Project.full_pick(args.parent, args.part)
+            if proj is None:
+                print("No such project found")
+                return
+            cls.remove_project(proj)
+        else:
+            cls.remove_project(args.name)
+        
         
             
 
@@ -153,12 +183,16 @@ class AssignCommand(Command):
 
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        parser.add_argument('name', type=str)
+        # parser.add_argument('name', type=str)
+        name = parser.add_mutually_exclusive_group(required=True)
+        name.add_argument('--partial-project', '-r', type=str, dest='part')
+        name.add_argument('--project', '-p', type=str)
         parser.add_argument('--show', action='store_true')
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        proj = Project.pick_project(args.name)
+        # proj = Project.pick_project(args.name)
+        proj = Project.full_pick(args.project, args.part)
         if proj is None:
             print(f"Project {args.name} doesn't exist")
             return
@@ -218,7 +252,18 @@ class WakeUpCommand(Command):
         git.commit(f"[m] {date}")
         rbl.days.append(rb.TODAY)
         
-    
+
+class UnfocusCommand(Command):
+    command = ["unfocus"]
+    help = "mark the inprogress project back to not done"
+
+    @classmethod
+    def run_(cls) -> None:
+        tasks = Today().get_tasks()
+        for task in tasks:
+            if task.mark == Mark.InProgress:
+                task.set_mark(Mark.NotDone)
+        
 class MarkCommand(Command):
     command = ["mark", 'm']
     help = "Mark the progress of a task from agenda"
@@ -239,11 +284,9 @@ class MarkCommand(Command):
         else:
             mark = Mark.NotDone
 
-        if mark == Mark.InProgress:
-            tasks = Today().get_tasks()
-            for task in tasks:
-                if task.mark == Mark.InProgress:
-                    task.set_mark(Mark.NotDone)
+        if mark == Mark.InProgress and args.step_id is None:
+            UnfocusCommand.run_()
+           
             
         task = Today().get_task_by_num(args.task_id)
         if args.step_id is None:
@@ -256,6 +299,8 @@ class MarkCommand(Command):
 
         if args.show:
             TodayCommand.run_()
+
+
     # think where to store the mark (note on the task?)
     # also steps.. are not int, more like 1.3 or something
     # actually do we really need a done branch... i feel like it's a limitation more than anything
