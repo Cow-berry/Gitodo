@@ -21,7 +21,7 @@ class Category:
     path: str
     name: str
 
-    COLOUR = "99"
+    COLOUR = f.LIGHTMAGENTA_EX
     LIST_BRANCH = rb.CATEGORIES
 
     def __init__(self, hash: str, path: str, **kwargs):
@@ -32,6 +32,19 @@ class Category:
     def __str__(self) -> str:
         return f"{f.LIGHTYELLOW_EX}{self.name} ({self.path}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
 
+    @property
+    def display(self) -> str:
+        return f"{self.COLOUR}{self.name} ({self.path.replace('.', ' -> ')})"
+
+    @staticmethod
+    def is_subcat(a_str: str, b_str: str) -> bool:
+        a = a_str.split('.')
+        b = b_str.split('.')
+        if len(a) <= len(b):
+            return False
+        return all([ax == bx for ax, bx in zip(a, b)])
+        
+    
     @classmethod
     def process_note(cls, hash: str, note: str) -> Self:
         args = json.loads(note)
@@ -48,19 +61,21 @@ class Category:
         return cls.get_by_hashes(tasks)
 
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b) -> list[Self]:
-        return [task for task in cls.get_existing() if cond(path_name, task.path)]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b, hash: str | None = None) -> list[Self]:
+        return [task for task in cls.get_existing(hash) if cond(path_name, task.path)]
     
     # supposes that tasks have unique names..
     # deprecated
     @classmethod
-    def get_existing_dict(cls) -> dict[str, Self]:
-        return {task.path: task for task in cls.get_existing()}
+    def get_existing_dict(cls, **kwargs) -> dict[str, Self]:
+        return {task.path: task for task in cls.get_existing(**kwargs)}
 
     # deprecated
+    # category only, since they're unique
+    # maybe rename appropriately
     @classmethod
-    def get_by_name(cls, name: str) -> Self:
-        return cls.get_existing_dict()[name]
+    def get_by_name(cls, name: str, **kwargs) -> Self | None:
+        return cls.get_existing_dict(**kwargs).get(name)
 
     @classmethod
     def exists(cls, name: str) -> bool:
@@ -137,13 +152,14 @@ class Project(Category):
     category: str
     archived: bool
     
-    COLOUR = "100"
+    COLOUR = f.LIGHTCYAN_EX
     LIST_BRANCH = rb.PROJECTS
     DELIMITER = ""
 
-    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", **kwargs):
+    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", archived: bool = False, **kwargs):
         self.hash = hash
         self.category = category
+        self.archived = archived
         self.name = name
         self.path = f"{category}>>>{name}"
 
@@ -227,6 +243,8 @@ class Step(Category):
     category: str
     project: str
     name: str
+
+    COLOUR = f.CYAN
 
     def __init__(self, hash: str, category: str, project: str, name: str, **kwargs):
         self.hash = hash

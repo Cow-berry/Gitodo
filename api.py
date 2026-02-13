@@ -64,13 +64,22 @@ class CreateCommand(Command):
     def run(cls, args: argparse.Namespace) -> None:
         task_type: str = args.task_type
         if task_type.startswith('c'):
+            # already handles check for no duplicates
             Category.create(args.name)
         elif task_type.startswith('p'):
+            if any([p.category==args.parent for p in Project.get_list_by_name(args.name)]):
+                print(f"Project {Project.COLOUR}{args.name}{s.RESET_ALL} under category {Category.COLOUR}{args.parent.replace('.', ' -> ')}{s.RESET_ALL} already exists")
+                # TODO: show the project info
+                return
             Project.create(args.name, args.parent)
         elif task_type.startswith('s'):
             proj = Project.full_pick(args.parent, args.part)
             if proj is None:
-                print("No such project found")
+                # print("No such project found")
+                if args.parent:
+                    print(f"No project named exactly {Project.COLOUR}{args.parent}{s.RESET_ALL} exists")
+                else:
+                    print(f"No project with name containing {Project.COLOUR}{args.part}{s.RESET_ALL} exists")
                 return
             Step.create(args.name, proj)
 
@@ -86,7 +95,10 @@ class RemoveCommand(Command):
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
-        project.add_argument('name', type=str)
+        name = project.add_mutually_exclusive_group(required=True)
+        name.add_argument('--partial-parent', '-r', type=str, dest='part')
+        name.add_argument('--parent', '-p', type=str)
+        # project.add_argument('name', type=str)
 
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('step_id', type=int)
@@ -98,16 +110,36 @@ class RemoveCommand(Command):
     @staticmethod
     def remove_step(proj: Project, id: int) -> None:
         step = proj.get_steps()[id]
-        new_proj_hash = ListCommit(proj.hash).remove(step.hash)
+        new_proj_hash = ListCommit(proj.hash).remove(step.hash) # steps go to valhalla forever
         rbl.projects.replace(proj.hash, new_proj_hash)
 
     @staticmethod
     def remove_project(proj: Project) -> None:
-        pass
+        rbl.archived_projects.append(proj.hash)
+        rbl.projects.remove(proj.hash)
+        print(f"removed {Project.COLOUR}{proj.name}{s.RESET_ALL}")
 
-    @staticmethod
-    def remove_category(name: str) -> None:
-        pass
+    @classmethod
+    def remove_category(cls, name: str) -> None:
+        cat = Category.get_by_name(name)
+        if cat is None:
+            print(f"No category named {name} exists")
+            return
+        
+        all_projects = Project.get_existing()
+
+        subcats = {p.category for p in all_projects if Category.is_subcat(p.category, cat.path)}
+        for subcat in subcats:
+            cls.remove_category(subcat)
+
+        projects = [p for p in all_projects if p.category == cat.path]
+        for project in projects:
+            cls.remove_project(project)
+
+
+        rbl.archived_categories.append(cat.hash)
+        rbl.categories.remove(cat.hash)
+        print(f"removed {Category.COLOUR}{cat.display}{s.RESET_ALL}")
     
     # Removing a project should make it still readable, but archived (and maybe restorable)
     # Removing a category should be reflected in the browse command (project that are inside the removed category also need to removed (maybe with a warning)
@@ -144,9 +176,62 @@ class RemoveCommand(Command):
                 return
             cls.remove_project(proj)
         else:
-            cls.remove_project(args.name)
+            cls.remove_category(args.name)
         
+
+class RestoreCommand(Command):
+    command = ['restore']
+    help = "Remove a task"
+
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='task_type')
+
+        category = subcmds.add_parser('category', aliases=['c'])
+        category.add_argument('name', type=str)
+
+        project = subcmds.add_parser('project', aliases=['p'])
+        project.add_argument('name', type=str)
+
+    @staticmethod
+    def restore_project(proj: Project):
+        rbl.projects.append(proj.hash)
+        rbl.archived_projects.remove(proj.hash)
+        print(f"restored {Project.COLOUR}{proj.name}{s.RESET_ALL}")
+
+    @classmethod
+    def restore_category(cls, name: str):
+        cat = Category.get_by_name(name, hash=rb.ARCHIVED_CATEGORIES)
+        ex_cat = Category.get_by_name(name)
+        if cat and ex_cat:
+            print("Category named {name} exists both in the data and archive.\nRestore is impossible")
+            return
+        if cat is None:
+            print(f"No archived category named {name} exists")
+            return
+        all_projects = Project.get_existing(hash=rb.ARCHIVED_PROJECTS)
+
+        subcats = {p.category for p in all_projects if Category.is_subcat(p.category, cat.path)}
+        for subcat in subcats:
+            cls.restore_category(subcat)
+
+        projects = [p for p in all_projects if p.category == cat.path]
+        for project in projects:
+            cls.restore_project(project)
+
+
+        rbl.categories.append(cat.hash)
+        rbl.archived_categories.remove(cat.hash)
+        print(f"restored {Category.COLOUR}{cat.display}{s.RESET_ALL}")
         
+            
+
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        if args.task_type.startswith('p'):
+            project = Project.pick(args.name, hash=rbl.archived_projects)
+        else:
+            cls.restore_category(args.name)
             
 
 
@@ -163,19 +248,25 @@ class BrowseCommand(Command):
     help = "show all stored tasks"
     TAB = ' '*2
 
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('--all', '-a', dest='all', action='store_true')
+        
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         projects: list[Project] = Project.get_existing()
-        projects.sort(key=lambda p: p.path)
+        projects.sort(key=lambda p: p.category)
+        if not args.all:
+            projects = [p for p in projects if not p.archived]
         prev = None
         for proj in projects:
             if prev is None or proj.category != prev:
-                cat_name = proj.category.replace('.', ' > ')
-                print(f"{f.LIGHTMAGENTA_EX}{cat_name}{s.RESET_ALL}")
+                cat_name = proj.category.replace('.', ' -> ')
+                print(f"{Category.COLOUR}{cat_name}{s.RESET_ALL}")
                 prev = proj.category
-            print(f"{cls.TAB}{f.LIGHTCYAN_EX}{proj.name}{s.RESET_ALL}")
+            print(f"{cls.TAB}{Project.COLOUR}{proj.name}{s.RESET_ALL}")
             for i, step in enumerate(proj.get_steps()):
-                print(f"{cls.TAB*2}{f.CYAN}{i}. {step.name}{s.RESET_ALL}")
+                print(f"{cls.TAB*2}{Step.COLOUR}{i}. {step.name}{s.RESET_ALL}")
 
 class AssignCommand(Command):
     command = ["assign", 'a']

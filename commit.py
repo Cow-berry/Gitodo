@@ -27,7 +27,7 @@ def install():
     git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, rb.TODAY], "All days")
 
     git.switch(rb.TASK_STORAGE)
-    for name in [rb.CATEGORIES, rb.PROJECTS]:
+    for name in [rb.CATEGORIES, rb.PROJECTS, rb.ARCHIVED_CATEGORIES, rb.ARCHIVED_PROJECTS]:
         print(f"{name = }")
         git.branch_switch(name, rb.TASK_STORAGE)
         git.commit(f"All {name}")
@@ -56,7 +56,7 @@ class ListCommit(Commit):
         return git.merge_pick(self.hash, upd(self.parents), self.subject, merge=False)
         
     def append(self, hash: str) -> str:
-        return self.update(lambda l: l + [hash])
+        return self.update(lambda l: l + [hash] if hash not in l else l)
 
     def remove(self, hash: str) -> str:
         return self.update(lambda l: l.remove(hash) or l) # type: ignore
@@ -83,8 +83,10 @@ class ReservedBranches:
     MAIN = 'main'
     TASK_STORAGE = 'task-storage'
     CATEGORIES = 'categories'
-    CRAWL = 'crawl'
     PROJECTS = 'projects'
+    ARCHIVED_CATEGORIES = 'archived-categories'
+    ARCHIVED_PROJECTS = 'archived-projects'
+    CRAWL = 'crawl'
     DONE = 'done'
     DAYS_STORAGE = 'days-storage'
     DAYS = 'days'
@@ -95,9 +97,11 @@ rb = ReservedBranches
 class ReservedBrancheLists:
     categories: ListBranch
     projects: ListBranch
+    archived_categories: ListBranch
+    archived_projects: ListBranch
     days: ListBranch
     today: ListBranch
     def __getattr__(self, name: str) -> ListBranch:
-        return ListBranch(name)
+        return ListBranch(name.replace('_', '-'))
 
 rbl = ReservedBrancheLists()
