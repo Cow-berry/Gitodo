@@ -229,7 +229,8 @@ class RestoreCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         if args.task_type.startswith('p'):
-            project = Project.pick(args.name, hash=rbl.archived_projects)
+            project = Project.pick(args.name, hash=rb.ARCHIVED_PROJECTS)
+            cls.restore_project(project)
         else:
             cls.restore_category(args.name)
             
@@ -255,9 +256,9 @@ class BrowseCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         projects: list[Project] = Project.get_existing()
+        if args.all:
+            projects += Project.get_existing(rb.ARCHIVED_PROJECTS)
         projects.sort(key=lambda p: p.category)
-        if not args.all:
-            projects = [p for p in projects if not p.archived]
         prev = None
         for proj in projects:
             if prev is None or proj.category != prev:

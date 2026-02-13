@@ -2,7 +2,7 @@ import git
 import pretty
 from pretty import *
 
-from typing import Self, override
+from typing import Self, override, Callable
 from dataclasses import dataclass
 from commit import rb, rbl, ListCommit, Commit
 from pprint import pprint
@@ -61,8 +61,8 @@ class Category:
         return cls.get_by_hashes(tasks)
 
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b, hash: str | None = None) -> list[Self]:
-        return [task for task in cls.get_existing(hash) if cond(path_name, task.path)]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, **kwargs) -> list[Self]:
+        return [task for task in cls.get_existing(**kwargs) if cond(path_name, task.path)]
     
     # supposes that tasks have unique names..
     # deprecated
@@ -116,7 +116,7 @@ class Category:
     def full_pick(cls, name: str | None, search: str | None) -> Self | None:
         if name is not None:
             return cls.pick(name)
-        return cls.partial_pick(search)
+        return cls.partial_pick(search or "\0")
 
     @classmethod
     def get_or_create(cls, name: str, *args) -> Self:
@@ -139,7 +139,7 @@ class Category:
             rbl.categories.append(hash)
             git.switch(rb.CRAWL)
 
-        return cls.get_by_name(name)
+        return cls.get_by_name(name) # type: ignore
 
     @classmethod
     def create(cls, name: str, *args) -> None:
@@ -150,16 +150,14 @@ class Category:
 class Project(Category):
     steps: list[str]
     category: str
-    archived: bool
     
     COLOUR = f.LIGHTCYAN_EX
     LIST_BRANCH = rb.PROJECTS
     DELIMITER = ""
 
-    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", archived: bool = False, **kwargs):
+    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", **kwargs):
         self.hash = hash
         self.category = category
-        self.archived = archived
         self.name = name
         self.path = f"{category}>>>{name}"
 
@@ -174,7 +172,7 @@ class Project(Category):
         return git.get_parents(self.hash)[0]
 
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b, **kwargs) -> list[Self]:
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, **kwargs) -> list[Self]:
         return [task for task in cls.get_existing(**kwargs) if cond(path_name, task.name)]
     
     @classmethod
