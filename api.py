@@ -282,10 +282,9 @@ class AssignCommand(Command):
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        # proj = Project.pick_project(args.name)
         proj = Project.full_pick(args.project, args.part)
         if proj is None:
-            print(f"Project {args.name} doesn't exist")
+            print(f"Project {args.project or args.part} doesn't exist")
             return
 
         Task.create(proj)

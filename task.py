@@ -91,7 +91,7 @@ class Category:
         
         print("Choose one from this list:")
         for i, p in enumerate(tasks):
-            print(f"- [{i}] {p}")
+            print(f"- [{cls.COLOUR}{i}{s.RESET_ALL}] {p}")
             
         while True:
             inp = input(f"Enter number in [0, {len(tasks)-1}] or q(uit): ")
@@ -110,7 +110,7 @@ class Category:
 
     @classmethod
     def partial_pick(cls, search: str) -> Self | None:
-        return cls.pick(search, cond=lambda search, path: search in path)
+        return cls.pick(search, cond=lambda search, path: search.lower() in path.lower())
 
     @classmethod
     def full_pick(cls, name: str | None, search: str | None) -> Self | None:
@@ -173,21 +173,19 @@ class Project(Category):
     def project_root(self) -> str:
         return git.get_parents(self.hash)[0]
 
-    # @classmethod
-    # def get_list_by_name(cls, name: str) -> list[Self]:
-    #     return [proj for proj in cls.get_existing() if proj.name == name]
-
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b) -> list[Self]:
-        return [task for task in cls.get_existing() if cond(path_name, task.name)]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], true] = lambda a, b: a == b, **kwargs) -> list[Self]:
+        return [task for task in cls.get_existing(**kwargs) if cond(path_name, task.name)]
     
     @classmethod
     def get_by_root(cls, hash: str) -> Project:
         note = git.notes_show(hash)
         root = cls.process_note(hash, note)
         proj_list = cls.get_list_by_name(root.name)
-        return [proj for proj in proj_list if proj.project_root][0]
+        archived_proj_list = cls.get_list_by_name(root.name, hash=rb.ARCHIVED_PROJECTS)
+        return [proj for proj in proj_list + archived_proj_list if proj.project_root == hash][0]
 
+    # doesn't process archive yet
     @classmethod
     def get_by_roots(cls, hashes: list[str]) -> list[Project]:
         roots = [cls.process_note(hash, note) for hash, note in zip(hashes, git.notes_show_list_doubles(hashes))]
