@@ -14,14 +14,20 @@ import os
 from colorama import Fore as f
 from colorama import Style as s
 
-# def add_fuzzy_option(parser: argparse.ArgumentParser, option: str) -> None:
-#     group = parser.add_mutually_exclusive_group(required=True)
-#     group.add_argument('--fuzzy', 'r', type=str)
-#     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
+def add_fuzzy_option(parser: argparse.ArgumentParser, option: str) -> None:
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--fuzzy', '-r', type=str)
+    group.add_argument(f'--{option}', f'-{option[0]}', type=str)
 
-# def process_fuzzy_option[T: Category](cls: type[T], option: str) -> None:
-#     cls
-#     pass
+def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> T | None:
+    task = cls.full_pick( args.__getattribute__(option), args.fuzzy)
+    if task is not None:
+        return task
+    if args.fuzzy:
+        print(f"No {cls.__name__.lower()} with name containing {cls.COLOUR}{args.fuzzy}{s.RESET_ALL} found")
+    else:
+        print(f"No {cls.__name__.lower()} named exactly {cls.COLOUR}{args.__getattribute__(option)}{s.RESET_ALL} found")
+    return None
     
 class Command:
     command: list[str] = []
@@ -67,10 +73,7 @@ class CreateCommand(Command):
 
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('name', type=str)
-        # add_fuzzy_option(step, 'parent')
-        name = step.add_mutually_exclusive_group(required=True)
-        name.add_argument('--partial-parent', '-r', type=str, dest='part')
-        name.add_argument('--parent', '-p', type=str)
+        add_fuzzy_option(step, 'parent')
         
     @classmethod
     @override
@@ -86,14 +89,8 @@ class CreateCommand(Command):
                 return
             Project.create(args.name, args.parent)
         elif task_type.startswith('s'):
-            proj = Project.full_pick(args.fuzzy, args.part)
-            if proj is None:
-                # print("No such project found")
-                if args.parent:
-                    print(f"No project named exactly {Project.COLOUR}{args.parent}{s.RESET_ALL} exists")
-                else:
-                    print(f"No project with name containing {Project.COLOUR}{args.part}{s.RESET_ALL} exists")
-                return
+            proj = process_fuzzy_option(args, Project, 'parent')
+            if proj is None: return
             Step.create(args.name, proj)
 
 class RemoveCommand(Command):
@@ -109,17 +106,11 @@ class RemoveCommand(Command):
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
-        name = project.add_mutually_exclusive_group(required=True)
-        name.add_argument('--partial-parent', '-r', type=str, dest='part')
-        name.add_argument('--parent', '-p', type=str)
-        # project.add_argument('name', type=str)
+        add_fuzzy_option(project, 'name')
 
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('step_id', type=int)
-        name = step.add_mutually_exclusive_group(required=True)
-        name.add_argument('--partial-parent', '-r', type=str, dest='part')
-        name.add_argument('--parent', '-p', type=str)
-
+        add_fuzzy_option(step, 'parent')
 
     @staticmethod
     def remove_step(proj: Project, id: int) -> None:
@@ -167,29 +158,13 @@ class RemoveCommand(Command):
         if task_type == 'p': task_type = 'project'
         if task_type == 's': task_type = 'step'
         
-        # if task_type in ['category', 'project']:
-        #     is_cat = task_type == 'category'
-        #     cls = Category if is_cat else Project
-        #     branch_list = rbl.categories if is_cat else rbl.projects
-            
-        #     obj: Category | None = cls.pick(args.name)
-        #     if obj is None:
-        #         print(f"No {task_type} with name {args.name} exists")
-        #         return
-        #     branch_list.remove(obj.hash)
-        #     return
-
         if task_type == 'step':
-            proj = Project.full_pick(args.parent, args.part)
-            if proj is None:
-                print("No such project found")
-                return
+            proj = process_fuzzy_option(args, Project, 'parent')
+            if proj is None: return
             cls.remove_step(proj, args.step_id)
         elif task_type == 'project':
-            proj = Project.full_pick(args.parent, args.part)
-            if proj is None:
-                print("No such project found")
-                return
+            proj = process_fuzzy_option(args, Project, 'name')
+            if proj is None: return
             cls.remove_project(proj)
         else:
             cls.remove_category(args.name)
@@ -208,9 +183,7 @@ class RestoreCommand(Command):
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
-        name = project.add_mutually_exclusive_group(required=True)
-        name.add_argument('--partial-parent', '-r', type=str, dest='part')
-        name.add_argument('--parent', '-p', type=str)
+        add_fuzzy_option(project, 'name')
 
     @staticmethod
     def restore_project(proj: Project) -> None:
@@ -249,10 +222,8 @@ class RestoreCommand(Command):
     def run(cls, args: argparse.Namespace) -> None:
         print(args)
         if args.task_type.startswith('p'):
-            project = Project.full_pick(args.parent, args.part, hash=rb.ARCHIVED_PROJECTS)
-            if not project:
-                print("nope")
-                return
+            project = process_fuzzy_option(args, Project, 'name')
+            if not project: return
             cls.restore_project(project)
         else:
             cls.restore_category(args.name)
@@ -303,24 +274,19 @@ class AssignCommand(Command):
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         # parser.add_argument('name', type=str)
-        name = parser.add_mutually_exclusive_group(required=True)
-        name.add_argument('--partial-project', '-r', type=str, dest='part')
-        name.add_argument('--project', '-p', type=str)
+        add_fuzzy_option(parser, 'name')
         parser.add_argument('--show', action='store_true')
 
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        proj = Project.full_pick(args.project, args.part)
-        if proj is None:
-            print(f"Project {args.project or args.part} doesn't exist")
-            return
-
+        proj = process_fuzzy_option(args, Project, 'name')
+        if proj is None: return
         Task.create(proj)
         if args.show:
             TodayCommand.run_()
 
 class UnassignCommand(Command):
-    command: list[str] = ["unassign"]
+    command: list[str] = ["unassign", 'una']
     help: str = "Unassign a task from today's agenda"
 
     @override
@@ -408,7 +374,7 @@ class MarkCommand(Command):
         else:
             mark = Mark.NotDone
 
-        if mark == Mark.InProgress and args.step_id is None:
+        if mark == Mark.InProgress:
             UnfocusCommand.run_()
            
             
@@ -416,6 +382,8 @@ class MarkCommand(Command):
         if args.step_id is None:
             task.set_mark(mark)
         else:
+            if mark == Mark.InProgress and task.mark == Mark.NotDone:
+                task.set_mark(Mark.InProgress)
             step: TaskStep = task.get_steps()[int(args.step_id)]
             step.set_mark(mark)
 

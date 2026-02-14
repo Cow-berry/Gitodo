@@ -233,7 +233,7 @@ class Project(Category):
 
     @override
     @classmethod
-    def create(cls, name: str, parent: str, *_) -> None: # type: ignore
+    def create(cls, name: str, parent: str) -> None: # type: ignore
         parent_cat = Category.get_or_create(parent)
         commit_name = f"{name} <<< {parent}"
         git.switch(rb.CRAWL)
