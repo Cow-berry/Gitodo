@@ -9,7 +9,7 @@ def log(parent: str, child: str, pretty: str = "%H", ancestry_path: bool = True)
     child = _fix_name(child)
     parent = _fix_name(parent)
 
-    flags = []
+    flags: list[str] = []
     if pretty:
         flags.append(f'--pretty={pretty}')
     if ancestry_path:
@@ -24,7 +24,7 @@ def show(nodes: list[str] | str | None = None, pretty: str = "%P") -> str:
         nodes = []
     nodes = [_fix_name(node) for node in nodes]
     
-    flags = []
+    flags: list[str] = []
     if pretty:
         flags.append(f'--pretty={pretty}')
 
@@ -63,9 +63,9 @@ def switch_reset(switch_branch: str, reset_branch: str) -> None:
     reset(reset_branch)
 
 # todo remove
-def reset_branch(b_from: str, b_to: str, *args, **kwargs) -> None:
+def reset_branch(b_from: str, b_to: str, mode: str = '--mixed') -> None:
     switch(b_from)
-    reset(b_to, *args, **kwargs)
+    reset(b_to, mode)
     
 def commit(msg: str) -> None:
     run_cmd(['git', 'commit', '--allow-empty', '-m', msg])
@@ -74,7 +74,7 @@ def commit_hash(msg: str) -> str:
     commit(msg)
     return show(pretty="%H")
 
-def merge_pick(tree: str, parents: list[str], message: str, merge=True) -> str:
+def merge_pick(tree: str, parents: list[str], message: str, merge: bool=True) -> str:
     tree = _fix_name(tree)
     parents = [_fix_name(parent) for parent in parents ]
     parents = [x for parent in parents for x in ['-p', parent]]
@@ -89,7 +89,9 @@ def merge_pick(tree: str, parents: list[str], message: str, merge=True) -> str:
 
     
 
-def get_children(parent: str, exclude: list[str] = []) -> list[str]:
+def get_children(parent: str, exclude: list[str] | None = None) -> list[str]:
+    if exclude is None:
+        exclude = []
     parent = show(parent, pretty="%H")
     cmd = ['git', 'rev-list', '--all', '--parents']
     families = [family.split(' ') for family in run_cmd(cmd).split('\n')]
@@ -98,12 +100,16 @@ def get_children(parent: str, exclude: list[str] = []) -> list[str]:
             if parent in parents
             and child not in exclude]
 
-def get_parents(commit_hash: str, exclude: list[str] = []) -> list[str]:
+def get_parents(commit_hash: str, exclude: list[str] | None = None) -> list[str]:
+    if exclude is None:
+        exclude = []
     return [parent
             for parent in show(commit_hash).split(' ')
             if parent not in exclude]
     
-def get_branches(commit_hash: str, exclude: list[str] = []) -> list[str]:
+def get_branches(commit_hash: str, exclude: list[str] | None = None) -> list[str]:
+    if exclude is None:
+        exclude = []
     branch_cmd = ['git', 'branch', '--points-at', commit_hash, '--format=%(refname:lstrip=2)']
     return [branch
             for branch in run_cmd(branch_cmd).split(' ')

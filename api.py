@@ -1,7 +1,8 @@
+from typing import LiteralString, override
 import git
 from run import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
 from commit import Commit, rb, rbl, ListCommit
-from task import Category, Project, Step, Task
+from task import Category, Project, Step, Task, TaskStep
 from today import Day, Today
 import commit
 import task
@@ -13,10 +14,18 @@ import os
 from colorama import Fore as f
 from colorama import Style as s
 
+# def add_fuzzy_option(parser: argparse.ArgumentParser, option: str) -> None:
+#     group = parser.add_mutually_exclusive_group(required=True)
+#     group.add_argument('--fuzzy', 'r', type=str)
+#     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
 
+# def process_fuzzy_option[T: Category](cls: type[T], option: str) -> None:
+#     cls
+#     pass
+    
 class Command:
     command: list[str] = []
-    help = ""
+    help: str = ""
     
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -31,18 +40,20 @@ class Command:
         pass
 
 class InstallCommand(Command):
-    command = ['install', 'nuke']
-    help = "Sets up the git environment"
+    command: list[str] = ['install', 'nuke']
+    help: str = "Sets up the git environment"
 
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         commit.install()
  
 
 class CreateCommand(Command):
-    command = ['create', 'c']
-    help = "Creates a task"
+    command: list[str] = ['create', 'c']
+    help: str = "Creates a task"
 
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         subcmds = parser.add_subparsers(dest='task_type')
@@ -56,11 +67,13 @@ class CreateCommand(Command):
 
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('name', type=str)
+        # add_fuzzy_option(step, 'parent')
         name = step.add_mutually_exclusive_group(required=True)
         name.add_argument('--partial-parent', '-r', type=str, dest='part')
         name.add_argument('--parent', '-p', type=str)
         
     @classmethod
+    @override
     def run(cls, args: argparse.Namespace) -> None:
         task_type: str = args.task_type
         if task_type.startswith('c'):
@@ -73,7 +86,7 @@ class CreateCommand(Command):
                 return
             Project.create(args.name, args.parent)
         elif task_type.startswith('s'):
-            proj = Project.full_pick(args.parent, args.part)
+            proj = Project.full_pick(args.fuzzy, args.part)
             if proj is None:
                 # print("No such project found")
                 if args.parent:
@@ -84,14 +97,15 @@ class CreateCommand(Command):
             Step.create(args.name, proj)
 
 class RemoveCommand(Command):
-    command = ['remove', 'r']
-    help = "Remove a task"
+    command: list[str] = ['remove', 'r']
+    help: str = "Remove a task"
 
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         subcmds = parser.add_subparsers(dest='task_type')
 
-        category = subcmds.add_parser('category', aliases=['c'])
+        category = subcmds.add_parser('category', aliases=['cat', 'c'])
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
@@ -110,7 +124,8 @@ class RemoveCommand(Command):
     @staticmethod
     def remove_step(proj: Project, id: int) -> None:
         step = proj.get_steps()[id]
-        new_proj_hash = ListCommit(proj.hash).remove(step.hash) # steps go to valhalla forever
+        # steps go to valhalla forever
+        new_proj_hash = ListCommit(proj.hash).remove(step.hash)
         rbl.projects.replace(proj.hash, new_proj_hash)
 
     @staticmethod
@@ -144,6 +159,7 @@ class RemoveCommand(Command):
     # Removing a project should make it still readable, but archived (and maybe restorable)
     # Removing a category should be reflected in the browse command (project that are inside the removed category also need to removed (maybe with a warning)
     # Steps can go to hell
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         task_type: str = args.task_type
@@ -180,9 +196,10 @@ class RemoveCommand(Command):
         
 
 class RestoreCommand(Command):
-    command = ['restore']
-    help = "Remove a task"
+    command: list[str] = ['restore']
+    help: str = "Remove a task"
 
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         subcmds = parser.add_subparsers(dest='task_type')
@@ -191,16 +208,18 @@ class RestoreCommand(Command):
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
-        project.add_argument('name', type=str)
+        name = project.add_mutually_exclusive_group(required=True)
+        name.add_argument('--partial-parent', '-r', type=str, dest='part')
+        name.add_argument('--parent', '-p', type=str)
 
     @staticmethod
-    def restore_project(proj: Project):
+    def restore_project(proj: Project) -> None:
         rbl.projects.append(proj.hash)
         rbl.archived_projects.remove(proj.hash)
         print(f"restored {Project.COLOUR}{proj.name}{s.RESET_ALL}")
 
     @classmethod
-    def restore_category(cls, name: str):
+    def restore_category(cls, name: str) -> None:
         cat = Category.get_by_name(name, hash=rb.ARCHIVED_CATEGORIES)
         ex_cat = Category.get_by_name(name)
         if cat and ex_cat:
@@ -225,11 +244,15 @@ class RestoreCommand(Command):
         print(f"restored {Category.COLOUR}{cat.display}{s.RESET_ALL}")
         
             
-
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
+        print(args)
         if args.task_type.startswith('p'):
-            project = Project.pick(args.name, hash=rb.ARCHIVED_PROJECTS)
+            project = Project.full_pick(args.parent, args.part, hash=rb.ARCHIVED_PROJECTS)
+            if not project:
+                print("nope")
+                return
             cls.restore_project(project)
         else:
             cls.restore_category(args.name)
@@ -245,14 +268,17 @@ class RestoreCommand(Command):
 # Todo show only children of one categorie
 # Todo show just one project (possibly a separate command)
 class BrowseCommand(Command):
-    command = ["browse", 'b']
-    help = "show all stored tasks"
-    TAB = ' '*2
+    command: list[str] = ["browse", 'b']
+    help: str = "show all stored tasks"
+    
+    TAB: LiteralString = ' '*2
 
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument('--all', '-a', dest='all', action='store_true')
-        
+
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         projects: list[Project] = Project.get_existing()
@@ -270,9 +296,10 @@ class BrowseCommand(Command):
                 print(f"{cls.TAB*2}{Step.COLOUR}{i}. {step.name}{s.RESET_ALL}")
 
 class AssignCommand(Command):
-    command = ["assign", 'a']
-    help = "Assign a task to today's agenda"
+    command: list[str] = ["assign", 'a']
+    help: str = "Assign a task to today's agenda"
 
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         # parser.add_argument('name', type=str)
@@ -293,13 +320,15 @@ class AssignCommand(Command):
             TodayCommand.run_()
 
 class UnassignCommand(Command):
-    command = ["unassign"]
-    help = "Unassign a task from today's agenda"
-    
+    command: list[str] = ["unassign"]
+    help: str = "Unassign a task from today's agenda"
+
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument('task_id', type=int)
 
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         task = Today().get_task_by_num(args.task_id)
@@ -309,12 +338,12 @@ class UnassignCommand(Command):
         rbl.today.remove(task.hash)        
     
 class TodayCommand(Command):
-    command = ["today", 't']
-    help = "Show today's agenda"
-    TAB = " "*3
+    command: list[str] = ["today", 't']
+    help: str = "Show today's agenda"
 
+    TAB: LiteralString = " "*3
 
-    
+    @override
     @classmethod
     def run_(cls) -> None:
         today_date = Today().date
@@ -328,9 +357,10 @@ class TodayCommand(Command):
             print(f"To switch use the `{f.LIGHTMAGENTA_EX}wakeup{s.RESET_ALL}` subcommand")
             
 class WakeUpCommand(Command):
-    command = ["wakeup"]
-    help = "Update the agenda to show the curret day"
+    command: list[str] = ["wakeup"]
+    help: str = "Update the agenda to show the curret day"
 
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         date = get_date()
@@ -345,9 +375,10 @@ class WakeUpCommand(Command):
         
 
 class UnfocusCommand(Command):
-    command = ["unfocus"]
-    help = "mark the inprogress project back to not done"
+    command: list[str] = ["unfocus"]
+    help: str = "mark the inprogress project back to not done"
 
+    @override
     @classmethod
     def run_(cls) -> None:
         tasks = Today().get_tasks()
@@ -356,9 +387,10 @@ class UnfocusCommand(Command):
                 task.set_mark(Mark.NotDone)
         
 class MarkCommand(Command):
-    command = ["mark", 'm']
-    help = "Mark the progress of a task from agenda"
+    command: list[str] = ["mark", 'm']
+    help: str = "Mark the progress of a task from agenda"
 
+    @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument('mark_type', choices=['done', 'inprogress', 'undone', *'diu'])
@@ -366,6 +398,7 @@ class MarkCommand(Command):
         parser.add_argument('-s', type=int, required=False, dest='step_id')
         parser.add_argument('--show', action='store_true')
 
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         if args.mark_type.startswith('d'):
@@ -383,7 +416,7 @@ class MarkCommand(Command):
         if args.step_id is None:
             task.set_mark(mark)
         else:
-            step = task.get_steps()[args.step_id]
+            step: TaskStep = task.get_steps()[int(args.step_id)]
             step.set_mark(mark)
 
             

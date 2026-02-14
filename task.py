@@ -1,15 +1,17 @@
 import git
 import pretty
-from pretty import *
+from pretty import rgb
 
-from typing import Self, override, Callable
+from colorama import Fore as f
+from colorama import Style as s
+from typing import Any, Self, final, override, Callable
 from dataclasses import dataclass
 from commit import rb, rbl, ListCommit, Commit
 from pprint import pprint
 from enum import Enum
 import json
 
-def generate_note(**kwargs) -> str:
+def generate_note(**kwargs: Any) -> str:
     return json.dumps(kwargs)
 
 
@@ -21,14 +23,15 @@ class Category:
     path: str
     name: str
 
-    COLOUR = f.LIGHTMAGENTA_EX
-    LIST_BRANCH = rb.CATEGORIES
+    COLOUR: str = f.LIGHTMAGENTA_EX
+    LIST_BRANCH: str = rb.CATEGORIES
 
-    def __init__(self, hash: str, path: str, **kwargs):
+    def __init__(self, hash: str, path: str, **_: dict[str, Any]) -> None:
         self.hash = hash
         self.path = path
         self.name = self.path.split('.')[-1]
 
+    @override
     def __str__(self) -> str:
         return f"{f.LIGHTYELLOW_EX}{self.name} ({self.path}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
 
@@ -61,29 +64,29 @@ class Category:
         return cls.get_by_hashes(tasks)
 
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, **kwargs) -> list[Self]:
-        return [task for task in cls.get_existing(**kwargs) if cond(path_name, task.path)]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None) -> list[Self]:
+        return [task for task in cls.get_existing(hash) if cond(path_name, task.path)]
     
     # supposes that tasks have unique names..
     # deprecated
     @classmethod
-    def get_existing_dict(cls, **kwargs) -> dict[str, Self]:
-        return {task.path: task for task in cls.get_existing(**kwargs)}
+    def get_existing_dict(cls, hash: str | None = None) -> dict[str, Self]:
+        return {task.path: task for task in cls.get_existing(hash)}
 
     # deprecated
     # category only, since they're unique
     # maybe rename appropriately
     @classmethod
-    def get_by_name(cls, name: str, **kwargs) -> Self | None:
-        return cls.get_existing_dict(**kwargs).get(name)
+    def get_by_name(cls, name: str, hash: str | None = None) -> Self | None:
+        return cls.get_existing_dict(hash).get(name)
 
     @classmethod
     def exists(cls, name: str) -> bool:
         return name in cls.get_existing_dict()
 
     @classmethod
-    def pick(cls, name: str, **kwargs) -> Self | None:
-        tasks: list[Self] = cls.get_list_by_name(name, **kwargs)
+    def pick(cls, name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None) -> Self | None:
+        tasks: list[Self] = cls.get_list_by_name(name, cond, hash)
         if len(tasks) == 0:
             return None
         elif len(tasks) == 1:
@@ -109,17 +112,19 @@ class Category:
         return tasks[index]
 
     @classmethod
-    def partial_pick(cls, search: str) -> Self | None:
-        return cls.pick(search, cond=lambda search, path: search.lower() in path.lower())
+    def partial_pick(cls, search: str, hash: str | None = None) -> Self | None:
+        return cls.pick(search, lambda search, path: search.lower() in path.lower(), hash)
 
     @classmethod
-    def full_pick(cls, name: str | None, search: str | None) -> Self | None:
+    def full_pick(cls, name: str | None, search: str | None, hash: str | None = None) -> Self | None:
         if name is not None:
-            return cls.pick(name)
-        return cls.partial_pick(search or "\0")
+            return cls.pick(name, hash=hash)
+        if search is None:
+            return None
+        return cls.partial_pick(search, hash=hash)
 
     @classmethod
-    def get_or_create(cls, name: str, *args) -> Self:
+    def get_or_create(cls, name: str, *_: list[Any]) -> Self:
         existing_paths: dict[str, Self] = cls.get_existing_dict()
         if name in existing_paths:
             return existing_paths[name]
@@ -139,28 +144,28 @@ class Category:
             rbl.categories.append(hash)
             git.switch(rb.CRAWL)
 
-        return cls.get_by_name(name) # type: ignore
+        return cls.get_existing_dict()[name]
 
     @classmethod
-    def create(cls, name: str, *args) -> None:
+    def create(cls, name: str) -> None:
         cls.get_or_create(name)
         
 
-
+@final
 class Project(Category):
-    steps: list[str]
     category: str
     
     COLOUR = f.LIGHTCYAN_EX
     LIST_BRANCH = rb.PROJECTS
     DELIMITER = ""
 
-    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", **kwargs):
+    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", **_: Any):
         self.hash = hash
         self.category = category
         self.name = name
         self.path = f"{category}>>>{name}"
 
+    @override
     def __str__(self) -> str:
         return f"{s.BRIGHT}{f.LIGHTYELLOW_EX}{self.name}{s.NORMAL} ({self.category}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
 
@@ -171,9 +176,10 @@ class Project(Category):
     def project_root(self) -> str:
         return git.get_parents(self.hash)[0]
 
+    @override
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, **kwargs) -> list[Self]:
-        return [task for task in cls.get_existing(**kwargs) if cond(path_name, task.name)]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None) -> list[Self]:
+        return [task for task in cls.get_existing(hash) if cond(path_name, task.name)]
     
     @classmethod
     def get_by_root(cls, hash: str) -> Project:
@@ -193,6 +199,7 @@ class Project(Category):
         # name_root_dict = {proj.name: proj.hash for proj in roots}
         # return [proj for proj in cls.get_existing() if proj.name in name_root_dict and proj.project_root == name_root_dict[proj.name]]
 
+    @override
     @classmethod
     def get_existing(cls, hash: str | None = None) -> list[Self]:
         tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
@@ -224,8 +231,9 @@ class Project(Category):
             break
         return projects[index]
 
+    @override
     @classmethod
-    def create(cls, name: str, parent: str) -> None:
+    def create(cls, name: str, parent: str, *_) -> None: # type: ignore
         parent_cat = Category.get_or_create(parent)
         commit_name = f"{name} <<< {parent}"
         git.switch(rb.CRAWL)
@@ -235,6 +243,7 @@ class Project(Category):
         mut_hash = git.commit_hash(f'[m] {commit_name}')
         rbl.projects.append(mut_hash)
 
+@final
 class Step(Category):
     category: str
     project: str
@@ -242,15 +251,16 @@ class Step(Category):
 
     COLOUR = f.CYAN
 
-    def __init__(self, hash: str, category: str, project: str, name: str, **kwargs):
+    def __init__(self, hash: str, category: str, project: str, name: str, **_: Any) -> None:
         self.hash = hash
         self.category = category
         self.project = project
         self.name = name
         self.path = f"{category}>>>{project}>>{name}"
-    
+
+    @override
     @classmethod
-    def create(cls, name: str, proj: Project) -> None:
+    def create(cls, name: str, proj: Project) -> None: # type: ignore
         # proj = Project.pick_project(parent)
         # if proj is None: return
         git.switch(rb.CRAWL)
@@ -280,14 +290,6 @@ class Mark(Enum):
             case Mark.InProgress: return rgb(0, 255, 255)
             case Mark.Done:       return rgb(50, 255, 50)
 
-class MarkedCommit(Commit):
-    mark: Mark
-    
-    def __init__(self, commit_hash: str, mark: Mark):
-        super().__init__(commit_hash)
-        # self.mark = mark
-        # git.notes_add(generate_note(mark))
-
 
 # TODO: implement api command updating marks on tasks and steps
 # make sure only one task can be in progress, but you can complete steps in any order
@@ -299,12 +301,12 @@ class Task:
     mark: Mark
     step_marks: dict[str, Mark] # step hash -> mark
     
-    def __init__(self, hash):
+    def __init__(self, hash: str) -> None:
         self.hash = hash
         self.project = Project.get_by_root(git.get_parents(hash)[1])
         self.parse_note()
 
-    def parse_note(self):
+    def parse_note(self) -> None:
         args = json.loads(git.notes_show(self.hash) or '{}')
         mark_name = args.get('mark', Mark.NotDone.name)
         self.mark = Mark[mark_name]
@@ -312,13 +314,13 @@ class Task:
         self.step_marks = {hash: Mark[step_marks[hash]] for hash in step_marks}
 
 
-    def update_note(self):
+    def update_note(self) -> None:
         git.notes_add(self.hash, generate_note(
             mark=self.mark.name,
             step_marks={hash: self.step_marks[hash].name for hash in self.step_marks}
         ))
 
-    def set_mark(self, mark: Mark):
+    def set_mark(self, mark: Mark) -> None:
         self.mark = mark
         self.update_note()
 
@@ -360,7 +362,7 @@ class TaskStep:
     step: Step
     mark: Mark
     
-    def __init__(self, task: Task, step: Step, mark: Mark):
+    def __init__(self, task: Task, step: Step, mark: Mark) -> None:
         self.task = task
         self.step = step
         self.mark = mark
@@ -369,7 +371,7 @@ class TaskStep:
     def name(self) -> str:
         return self.step.name
 
-    def set_mark(self, mark: Mark):
+    def set_mark(self, mark: Mark) -> None:
         self.task.step_marks[self.step.hash] = mark
         self.task.update_note()
 

@@ -10,7 +10,7 @@ os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY+".git")
 
 
-def debug_proc(proc: subprocess.CompletedProcess):
+def debug_proc(proc: subprocess.CompletedProcess[str]) -> subprocess.CompletedProcess[str]:
     code = proc.returncode
     code_msg = "SUCESS" if code == 0 else "FAILURE"
     line_lengh = os.get_terminal_size().columns
@@ -24,24 +24,24 @@ def debug_proc(proc: subprocess.CompletedProcess):
 class RunException(Exception):
     pass
 
-def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedProcess:
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    proc.stdout = proc.stdout.decode('utf-8').strip() # type: ignore
-    proc.stderr = proc.stderr.decode('utf-8').strip() # type: ignore
+def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc.stdout = proc.stdout.strip()
+    proc.stderr = proc.stderr.strip()
     if RUN_CMD_DEBUG:
         debug_proc(proc)
     if proc.returncode != 0 and do_raise:
-        raise RunException(f"# Failed to execute {cmd}:\n{proc.stderr}") # type: ignore
+        raise RunException(f"# Failed to execute {cmd}:\n{proc.stderr}")
     return proc
 
-def run_cmd(cmd: list[str], *args, **kwargs) -> str:
-    return run_cmd_proc(cmd, *args, **kwargs).stdout
+def run_cmd(cmd: list[str], do_raise: bool = True) -> str:
+    return run_cmd_proc(cmd, do_raise).stdout
 
-def run_cmd_if(cmd: list[str], *args, **kwargs) -> bool:
-    return run_cmd_proc(cmd, *args, **kwargs).returncode == 0
+def run_cmd_if(cmd: list[str], do_raise: bool = True) -> bool:
+    return run_cmd_proc(cmd, do_raise).returncode == 0
     
-def run_cmd_(cmd: str, *args,  **kwargs) -> str:
-    return run_cmd(cmd.split(), *args, **kwargs)
+def run_cmd_(cmd: str, do_raise: bool = True) -> str:
+    return run_cmd(cmd.split(), do_raise)
 
 def get_date(date: str="today") -> str:
     return run_cmd(['date', '--date', date, '+%x'])

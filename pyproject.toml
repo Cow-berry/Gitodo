@@ -11,3 +11,17 @@ dependencies = [
     "python-lsp-server>=1.14.0",
     "types-colorama>=0.4.15.20250801",
 ]
+
+[tool.uv]
+dev-dependencies = [
+    "basedpyright>=1.38.0",
+]
+
+
+[tool.basedpyright]
+reportUnusedCallResult = 'none'
+reportIncompatibleMethodOverride = 'none'
+reportMissingSuperCall = 'none'
+reportUninitializedInstanceVariable = 'none'
+reportUnsafeMultipleInheritance = 'none'
+reportAny = 'none'

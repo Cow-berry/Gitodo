@@ -3,13 +3,13 @@ from pretty import *
 from run import INSTALLED, run_cmd, get_date
 from git import get_hash
 
-from typing import Optional, Callable, Self
+from typing import Callable, Self
 
 TAB = ' '*3
 
 # SPECIAL_BRANCHES = ['done', 'finished', 'days', 'last-parent', 'today', 'main', get_date()]
 
-def install():
+def install() -> None:
     run_cmd(['rm', '-rf', '.git/'])
     run_cmd(["git",  "init"])
     git.commit("Initial commit")
@@ -38,7 +38,7 @@ class Commit:
     subject: str
     parents: list[str]
     
-    def __init__(self, commit_hash: str):
+    def __init__(self, commit_hash: str) -> None:
         commit_hash = get_hash(commit_hash)
         self.hash = commit_hash
         self.subject = git.show(self.hash, pretty="%s")
@@ -80,17 +80,17 @@ class ListBranch(ListCommit):
         
         
 class ReservedBranches:
-    MAIN = 'main'
-    TASK_STORAGE = 'task-storage'
-    CATEGORIES = 'categories'
-    PROJECTS = 'projects'
-    ARCHIVED_CATEGORIES = 'archived-categories'
-    ARCHIVED_PROJECTS = 'archived-projects'
-    CRAWL = 'crawl'
-    DONE = 'done'
-    DAYS_STORAGE = 'days-storage'
-    DAYS = 'days'
-    TODAY = 'today'
+    MAIN: str = 'main'
+    TASK_STORAGE: str = 'task-storage'
+    CATEGORIES: str = 'categories'
+    PROJECTS: str = 'projects'
+    ARCHIVED_CATEGORIES: str = 'archived-categories'
+    ARCHIVED_PROJECTS: str = 'archived-projects'
+    CRAWL: str = 'crawl'
+    DONE: str = 'done'
+    DAYS_STORAGE: str = 'days-storage'
+    DAYS: str = 'days'
+    TODAY: str = 'today'
 
 rb = ReservedBranches
 

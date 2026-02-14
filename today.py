@@ -1,12 +1,16 @@
+from typing import LiteralString, override
 from commit import ListCommit, ListBranch, rb
 from task import Project, Task, Mark
-from pretty import *
+from pretty import rainbow, rgb, endl
 import git
 
+from colorama import Fore as f
+from colorama import Style as s
+
 class Day(ListCommit):
-    TAB = ' '*2
+    TAB: LiteralString = ' '*2
     
-    def __init__(self, hash):
+    def __init__(self, hash: str):
         super().__init__(hash)
 
     @property
@@ -25,10 +29,11 @@ class Day(ListCommit):
     def get_task_by_num(self, n: int) -> Task:
         return self.get_tasks()[n]
 
-    def __contains__(self, item) -> bool:
+    def __contains__(self, item: str) -> bool:
         return item in self.get_task_hashes()        
 
     # formats the list for `today` command
+    @override
     def __str__(self) -> str:
         tasks: list[Task] = self.get_tasks() # raw projects without steps
         res = rainbow(f"Agenda @ {self.date}:\n")
@@ -40,14 +45,14 @@ class Day(ListCommit):
             if task.mark == Mark.Done:
                 override_mark = Mark.Done
             for j, step in enumerate(steps):
-                res += f"{self.TAB}{ (override_mark or step.mark).colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
+                res += f"{self.__class__.TAB}{ (override_mark or step.mark).colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
         return res
             
         
 
 
 class Today(Day, ListBranch):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(rb.TODAY)
         
         
