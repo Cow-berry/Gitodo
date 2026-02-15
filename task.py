@@ -233,13 +233,13 @@ class Project(Category):
 
     @override
     @classmethod
-    def create(cls, name: str, parent: str) -> None: # type: ignore
-        parent_cat = Category.get_or_create(parent)
-        commit_name = f"{name} <<< {parent}"
+    def create(cls, name: str, cat: Category) -> None: # type: ignore
+        # parent_cat = Category.get_or_create(parent)
+        commit_name = f"{name} <<< {cat.path}"
         git.switch(rb.CRAWL)
-        git.reset(parent_cat.hash)
+        git.reset(cat.hash)
         const_hash = git.commit_hash(f'[i] {commit_name}')
-        git.notes_add(const_hash, generate_note(category=parent, name=name))
+        git.notes_add(const_hash, generate_note(category=cat.path, name=name))
         mut_hash = git.commit_hash(f'[m] {commit_name}')
         rbl.projects.append(mut_hash)
 

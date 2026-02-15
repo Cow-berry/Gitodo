@@ -20,7 +20,7 @@ def add_fuzzy_option(parser: argparse.ArgumentParser, option: str) -> None:
     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
 
 def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> T | None:
-    task = cls.full_pick( args.__getattribute__(option), args.fuzzy)
+    task = cls.full_pick(args.__getattribute__(option), args.fuzzy)
     if task is not None:
         return task
     if args.fuzzy:
@@ -69,7 +69,8 @@ class CreateCommand(Command):
 
         project = subcmds.add_parser('project', aliases=['p'])
         project.add_argument('name', type=str)
-        project.add_argument('--parent', '-p', type=str, required=True)
+        add_fuzzy_option(project, 'parent')
+        # project.add_argument('--parent', '-p', type=str, required=True)
 
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('name', type=str)
@@ -83,11 +84,13 @@ class CreateCommand(Command):
             # already handles check for no duplicates
             Category.create(args.name)
         elif task_type.startswith('p'):
-            if any([p.category==args.parent for p in Project.get_list_by_name(args.name)]):
-                print(f"Project {Project.COLOUR}{args.name}{s.RESET_ALL} under category {Category.COLOUR}{args.parent.replace('.', ' -> ')}{s.RESET_ALL} already exists")
+            cat = process_fuzzy_option(args, Category, 'parent')
+            if cat is None: return
+            if any([p.category==cat.path for p in Project.get_list_by_name(args.name)]):
+                print(f"Project {Project.COLOUR}{args.name}{s.RESET_ALL} under category {Category.COLOUR}{cat.path.replace('.', ' -> ')}{s.RESET_ALL} already exists")
                 # TODO: show the project info
                 return
-            Project.create(args.name, args.parent)
+            Project.create(args.name, cat)
         elif task_type.startswith('s'):
             proj = process_fuzzy_option(args, Project, 'parent')
             if proj is None: return
