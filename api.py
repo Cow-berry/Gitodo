@@ -397,8 +397,9 @@ class MarkCommand(Command):
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument('mark_type', choices=['done', 'inprogress', 'undone', *'diu'])
         parser.add_argument('task_id', type=int)
-        parser.add_argument('-s', type=int, required=False, dest='step_id')
-        parser.add_argument('--show', action='store_true')
+        parser.add_argument('step_id', type=int, default=None, nargs='?')
+        parser.add_argument('--show', '-s', action='store_true')
+        parser.add_argument('--archive', action='store_true')
 
     @override
     @classmethod
@@ -410,7 +411,7 @@ class MarkCommand(Command):
         else:
             mark = Mark.NotDone
 
-        if mark == Mark.InProgress:
+        if mark == Mark.InProgress or args.step_id is not None:
             UnfocusCommand.run_()
            
             
@@ -418,12 +419,13 @@ class MarkCommand(Command):
         if args.step_id is None:
             task.set_mark(mark)
         else:
-            if mark == Mark.InProgress and task.mark == Mark.NotDone:
+            if task.mark != Mark.Done:
                 task.set_mark(Mark.InProgress)
             step: TaskStep = task.get_steps()[int(args.step_id)]
             step.set_mark(mark)
 
-            
+        if args.archive:
+            RemoveCommand.remove_project(task.project)
 
         if args.show:
             TodayCommand.run_()
