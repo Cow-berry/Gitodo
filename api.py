@@ -14,16 +14,18 @@ import os
 from colorama import Fore as f
 from colorama import Style as s
 
-def add_fuzzy_option(parser: argparse.ArgumentParser, option: str) -> None:
-    group = parser.add_mutually_exclusive_group(required=True)
+def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: bool=True):
+    group = parser.add_mutually_exclusive_group(required=required)
     # default behaviour is fuzzy unless a flag is provided
-    group.add_argument('fuzzy', type=str, default=None, nargs="?")
+    group.add_argument(f'fuzzy', type=str, default=None, nargs="?", metavar='fuzzy')
     group.add_argument('--fuzzy', '-r', type=str, dest='fuzzy_flag')
     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
+    return group
 
-def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> T | None:
+def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], option: str, force_menu: bool=False, hash: str | None = None) -> T | None:
     fuzzy = args.fuzzy_flag or args.fuzzy
-    task = cls.full_pick(args.__getattribute__(option), fuzzy)
+    option_arg = args.__getattribute__(option)
+    task = cls.full_pick(option_arg, fuzzy, hash, force_menu)
     if task is not None:
         return task
     if fuzzy:
@@ -31,6 +33,17 @@ def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], op
     else:
         print(f"No {cls.__name__.lower()} named exactly {cls.COLOUR}{args.__getattribute__(option)}{s.RESET_ALL} found")
     return None
+
+def process_fuzzy_optional[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> tuple[T | None, bool]:
+    if (args.fuzzy or args.fuzzy_flag or args.__getattribute__(option)) is None:
+        return None, False
+    obj = process_fuzzy_option(args, cls, option)
+    not_found = obj is None
+    return (obj, not_found)
+    
+
+
+
     
 class Command:
     command: list[str] = []
@@ -65,7 +78,7 @@ class CreateCommand(Command):
     @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        subcmds = parser.add_subparsers(dest='task_type')
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
 
         category = subcmds.add_parser('category', aliases=['c'])
         category.add_argument('name', type=str)
@@ -106,7 +119,7 @@ class RemoveCommand(Command):
     @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        subcmds = parser.add_subparsers(dest='task_type')
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
 
         category = subcmds.add_parser('category', aliases=['cat', 'c'])
         category.add_argument('name', type=str)
@@ -165,11 +178,11 @@ class RemoveCommand(Command):
         if task_type == 's': task_type = 'step'
         
         if task_type == 'step':
-            proj = process_fuzzy_option(args, Project, 'parent')
+            proj = process_fuzzy_option(args, Project, 'parent', True)
             if proj is None: return
             cls.remove_step(proj, args.step_id)
         elif task_type == 'project':
-            proj = process_fuzzy_option(args, Project, 'name')
+            proj = process_fuzzy_option(args, Project, 'name', True)
             if proj is None: return
             cls.remove_project(proj)
         else:
@@ -183,7 +196,7 @@ class RestoreCommand(Command):
     @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        subcmds = parser.add_subparsers(dest='task_type')
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
 
         category = subcmds.add_parser('category', aliases=['c'])
         category.add_argument('name', type=str)
@@ -226,9 +239,8 @@ class RestoreCommand(Command):
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        print(args)
         if args.task_type.startswith('p'):
-            project = process_fuzzy_option(args, Project, 'name')
+            project = process_fuzzy_option(args, Project, 'name', True, rb.ARCHIVED_PROJECTS)
             if not project: return
             cls.restore_project(project)
         else:
@@ -253,14 +265,19 @@ class BrowseCommand(Command):
     @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        parser.add_argument('--all', '-a', dest='all', action='store_true')
+        parser.add_argument('--archived', '-a', dest='all', action='store_true')
+        add_fuzzy_option(parser, 'category', False)
 
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
+        cat, not_found = process_fuzzy_optional(args, Category, 'category')
+        if cat is None and not_found: return
         projects: list[Project] = Project.get_existing()
         if args.all:
-            projects += Project.get_existing(rb.ARCHIVED_PROJECTS)
+            projects += Project.get_existing(rb.ARCHIVED_PROJECTS, True)
+        if cat is not None:
+            projects = [p for p in projects if p.category == cat.path]
         projects.sort(key=lambda p: p.category)
         prev = None
         for proj in projects:
@@ -403,7 +420,7 @@ class ShowCommand(Command):
     @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        subcmd = parser.add_subparsers(dest='kind')
+        subcmd = parser.add_subparsers(dest='kind', required=True)
         
         project = subcmd.add_parser('project', aliases=['p'])
         add_fuzzy_option(project, 'name')
@@ -438,7 +455,7 @@ class ShowCommand(Command):
                 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='Gitodo')
-    sub_parsers = parser.add_subparsers(dest='command')
+    sub_parsers = parser.add_subparsers(dest='command', required=True)
     debug_parser = argparse.ArgumentParser(add_help=False)
     debug_parser.add_argument("--debug", action="store_true", help=argparse.SUPPRESS)
 
