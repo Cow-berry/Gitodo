@@ -285,7 +285,7 @@ class BrowseCommand(Command):
                 cat_name = proj.category.replace('.', ' -> ')
                 print(f"{Category.COLOUR}{cat_name}{s.RESET_ALL}")
                 prev = proj.category
-            print(f"{cls.TAB}{Project.COLOUR}{proj.name}{s.RESET_ALL}")
+            print(f"{cls.TAB}{Project.COLOUR if not proj.archived else f.LIGHTRED_EX}{proj.name}{s.RESET_ALL}")
             for i, step in enumerate(proj.get_steps()):
                 print(f"{cls.TAB*2}{Step.COLOUR}{i}. {step.name}{s.RESET_ALL}")
 

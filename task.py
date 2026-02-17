@@ -49,9 +49,9 @@ class Category:
         
     
     @classmethod
-    def process_note(cls, hash: str, note: str) -> Self:
+    def process_note(cls, hash: str, note: str, **kwargs: dict[str, Any]) -> Self:
         args = json.loads(note)
-        args.update({'hash': hash})
+        args.update({'hash': hash, **kwargs})
         return cls(**args)
 
     @classmethod
@@ -85,11 +85,11 @@ class Category:
         return name in cls.get_existing_dict()
 
     @classmethod
-    def pick(cls, name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None) -> Self | None:
+    def pick(cls, name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None, force_menu: bool=False) -> Self | None:
         tasks: list[Self] = cls.get_list_by_name(name, cond, hash)
         if len(tasks) == 0:
             return None
-        elif len(tasks) == 1:
+        elif len(tasks) == 1 and not force_menu:
             return tasks[0]
         
         print("Choose one from this list:")
@@ -109,19 +109,20 @@ class Category:
                 print("Out of range")
                 continue
             break
+        print()
         return tasks[index]
 
     @classmethod
-    def partial_pick(cls, search: str, hash: str | None = None) -> Self | None:
-        return cls.pick(search, lambda search, path: search.lower() in path.lower(), hash)
+    def partial_pick(cls, search: str, hash: str | None = None, force_menu: bool=False) -> Self | None:
+        return cls.pick(search, lambda search, path: search.lower() in path.lower(), hash, force_menu)
 
     @classmethod
-    def full_pick(cls, name: str | None, search: str | None, hash: str | None = None) -> Self | None:
+    def full_pick(cls, name: str | None, search: str | None, hash: str | None = None, force_menu: bool = False) -> Self | None:
         if name is not None:
             return cls.pick(name, hash=hash)
         if search is None:
             return None
-        return cls.partial_pick(search, hash=hash)
+        return cls.partial_pick(search, hash=hash, force_menu=force_menu)
 
     @classmethod
     def get_or_create(cls, name: str, *_: list[Any]) -> Self:
@@ -154,16 +155,18 @@ class Category:
 @final
 class Project(Category):
     category: str
+    archived: bool
     
     COLOUR = f.LIGHTCYAN_EX
     LIST_BRANCH = rb.PROJECTS
     DELIMITER = ""
 
-    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", **_: Any):
+    def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", archived: bool=False, **_: Any):
         self.hash = hash
         self.category = category
         self.name = name
         self.path = f"{category}>>>{name}"
+        self.archived = archived
 
     @override
     def __str__(self) -> str:
@@ -178,15 +181,15 @@ class Project(Category):
 
     @override
     @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None) -> list[Self]:
-        return [task for task in cls.get_existing(hash) if cond(path_name, task.name)]
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None, archived: bool=False) -> list[Self]:
+        return [task for task in cls.get_existing(hash, archived) if cond(path_name, task.name)]
     
     @classmethod
     def get_by_root(cls, hash: str) -> Project:
         note = git.notes_show(hash)
         root = cls.process_note(hash, note)
         proj_list = cls.get_list_by_name(root.name)
-        archived_proj_list = cls.get_list_by_name(root.name, hash=rb.ARCHIVED_PROJECTS)
+        archived_proj_list = cls.get_list_by_name(root.name, hash=rb.ARCHIVED_PROJECTS, archived=True)
         return [proj for proj in proj_list + archived_proj_list if proj.project_root == hash][0]
 
     # doesn't process archive yet
@@ -201,10 +204,10 @@ class Project(Category):
 
     @override
     @classmethod
-    def get_existing(cls, hash: str | None = None) -> list[Self]:
+    def get_existing(cls, hash: str | None = None, archived: bool= False) -> list[Self]:
         tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
         task_notes = [git.get_parents(task)[0] for task in tasks]
-        return [cls.process_note(hash, note) for hash, note in zip(tasks, git.notes_show_list(task_notes))]
+        return [cls.process_note(hash, note, archived=archived) for hash, note in zip(tasks, git.notes_show_list(task_notes))]
 
     # deprecated
     @classmethod
