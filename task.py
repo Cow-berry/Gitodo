@@ -335,26 +335,7 @@ class Task:
     def get_steps(self) -> list[TaskStep]:
         steps: list[Step] = self.project.get_steps()
         return [TaskStep(self, step, self.step_marks.get(step.hash, Mark.NotDone)) for step in steps]
-        
 
-    
-        
-    @classmethod
-    def create(cls, proj: Project) -> None:
-        today_commit = Commit(rb.TODAY)
-        date = today_commit.subject.split(' ')[-1]
-        const_today = today_commit.parents[0]
-        old_today = today_commit.hash
-        
-        git.switch(rb.CRAWL)
-        git.reset(const_today)
-        task = git.merge_pick(
-            rb.TODAY,
-            [const_today, proj.project_root],
-            f"@ {date} {proj.name}")
-        git.notes_add(task, generate_note(mark=Mark.NotDone.name))
-        new_today = rbl.today.append(task)
-        rbl.days.replace(old_today, new_today)
 
 @dataclass
 class TaskStep:

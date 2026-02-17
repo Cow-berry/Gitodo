@@ -299,12 +299,20 @@ class AssignCommand(Command):
         # parser.add_argument('name', type=str)
         add_fuzzy_option(parser, 'name')
         parser.add_argument('--show', action='store_true')
+        parser.add_argument('--schedule', '-d', type=str)
 
+    @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         proj = process_fuzzy_option(args, Project, 'name')
         if proj is None: return
-        Task.create(proj)
+        day: Day
+        if args.schedule is None:
+            day = Today()
+        else:
+            date = get_date(args.schedule)
+            day = Day.create_or_get(date)
+        day.create_task(proj)
         if args.show:
             TodayCommand.run_()
 
@@ -316,15 +324,22 @@ class UnassignCommand(Command):
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser.add_argument('task_id', type=int)
+        parser.add_argument('--schedule', '-d', type=str)
 
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        task = Today().get_task_by_num(args.task_id)
-        parents = git.get_parents(rb.TODAY)
-        if task.hash not in parents[1:] and task.hash != parents[0]:
+        day: Day
+        if args.schedule is None:
+            day = Today()
+        else:
+            date = get_date(args.schedule)
+            day = Day.create_or_get(date)
+        
+        task = day.get_task_by_num(args.task_id)
+        if task.hash not in day.items and task.hash != day.parents[0]:
             return
-        rbl.today.remove(task.hash)        
+        day.remove_task(task.hash)        
     
 class TodayCommand(Command):
     command: list[str] = ["today", 't']
@@ -335,11 +350,11 @@ class TodayCommand(Command):
     @override
     @classmethod
     def run_(cls) -> None:
-        today_date = Today().date
+        today = Today()
+        ShowCommand.show_day(today)
+        today_date = today.date
         actual_date = get_date()
 
-        print(Today())
-        
         if today_date != actual_date:
             print(f"Current agenda points to {f.LIGHTRED_EX}{today_date}{s.RESET_ALL}")
             print(f"But the actual date is {f.LIGHTGREEN_EX}{actual_date}{s.RESET_ALL}")

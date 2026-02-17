@@ -64,15 +64,15 @@ class ListCommit(Commit):
     def replace(self, old_hash: str, new_hash: str) -> str:
         return self.update(lambda l: [new_hash if x == old_hash else x for x in l])
 
-@final
-class ListBranch(ListCommit):
-    def __init__(self, branch_name: str):
-        super().__init__(branch_name)
-        self.branch = branch_name
-
     @property
     def items(self) -> list[str]:
         return self.parents[1:]
+
+class ListBranch(ListCommit):
+    def __init__(self, branch_name: str) -> None:
+        super().__init__(branch_name)
+        self.branch: str = branch_name
+
 
     @override
     def update(self, upd: Callable[[list[str]], list[str]]) -> str:

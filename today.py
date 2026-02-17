@@ -48,6 +48,28 @@ class Day(ListCommit):
         rbl.days.append(rb.TODAY)
         return Day(hash)
 
+    def create_task(self, proj: Project) -> None:
+        date = self.date
+        const_today = self.parents[0]
+        old_today = self.hash
+        
+        # git.switch(rb.CRAWL)
+        # git.reset(self.parents[0])
+        task = git.merge_pick(
+            rb.TODAY,
+            [self.parents[0], proj.project_root],
+            f"@ {self.date} {proj.name}",
+            False)
+        git.notes_add(task, generate_note(mark=Mark.NotDone.name))
+        new_self = self.append(task)
+        rbl.days.replace(self.hash, new_self)
+        # new_today = rbl.today.append(task)
+        # rbl.days.replace(old_today, new_today)
+
+    def remove_task(self, hash: str) -> None:
+        new_self = self.remove(hash)
+        rbl.days.replace(self.hash, new_self)
+
     def __contains__(self, item: str) -> bool:
         return item in self.get_task_hashes()        
 
