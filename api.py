@@ -16,15 +16,18 @@ from colorama import Style as s
 
 def add_fuzzy_option(parser: argparse.ArgumentParser, option: str) -> None:
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--fuzzy', '-r', type=str)
+    # default behaviour is fuzzy unless a flag is provided
+    group.add_argument('fuzzy', type=str, default=None, nargs="?")
+    group.add_argument('--fuzzy', '-r', type=str, dest='fuzzy_flag')
     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
 
 def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> T | None:
-    task = cls.full_pick(args.__getattribute__(option), args.fuzzy)
+    fuzzy = args.fuzzy_flag or args.fuzzy
+    task = cls.full_pick(args.__getattribute__(option), fuzzy)
     if task is not None:
         return task
-    if args.fuzzy:
-        print(f"No {cls.__name__.lower()} with name containing {cls.COLOUR}{args.fuzzy}{s.RESET_ALL} found")
+    if fuzzy:
+        print(f"No {cls.__name__.lower()} with name containing {cls.COLOUR}{fuzzy}{s.RESET_ALL} found")
     else:
         print(f"No {cls.__name__.lower()} named exactly {cls.COLOUR}{args.__getattribute__(option)}{s.RESET_ALL} found")
     return None
@@ -68,13 +71,13 @@ class CreateCommand(Command):
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
-        project.add_argument('name', type=str)
         add_fuzzy_option(project, 'parent')
+        project.add_argument('name', type=str)
         # project.add_argument('--parent', '-p', type=str, required=True)
 
         step = subcmds.add_parser('step', aliases=['s'])
-        step.add_argument('name', type=str)
         add_fuzzy_option(step, 'parent')
+        step.add_argument('name', type=str)
         
     @classmethod
     @override
