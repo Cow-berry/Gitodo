@@ -1,6 +1,6 @@
 from typing import LiteralString, override
 from commit import ListCommit, ListBranch, rb
-from task import Project, Task, Mark
+from task import Project, Task, Mark, generate_note
 from pretty import rainbow, rgb, endl
 from commit import rbl
 import git
@@ -77,16 +77,18 @@ class Day(ListCommit):
     @override
     def __str__(self) -> str:
         tasks: list[Task] = self.get_tasks() # raw projects without steps
-        res = rainbow(f"Agenda @ {self.date}:\n")
+        done_count = len([t for t in tasks if t.mark == Mark.Done])
+        dots = ''.join([f"{t.mark.colour}●{s.RESET_ALL}" for t in tasks])
+        res = rainbow(f"Agenda @ {self.date}") +  f"[{s.BRIGHT}{f.LIGHTGREEN_EX}{done_count}{s.RESET_ALL}/{len(tasks)}]:{dots}\n"
         ln = len(str(len(tasks)-1))
         for i, task in enumerate(tasks):
-            res += f"{task.mark.emoji()}{task.mark.colour}[{i:>{ln}}] {task.name} {rgb(*[160]*3)}({task.category}):{endl}"
+            res += f"{task.mark.emoji()}{task.mark.colour}[{i:>{ln}}] {task.name} {rgb(*[160]*3)}({task.category}){s.RESET_ALL}{s.BRIGHT}{f.LIGHTRED_EX}{'' if not task.project.archived else " ARCHIVED "}{s.RESET_ALL}:{endl}"
             steps = task.get_steps()
             override_mark = None
             if task.mark == Mark.Done:
                 override_mark = Mark.Done
             for j, step in enumerate(steps):
-                res += f"{self.__class__.TAB}{ (override_mark or step.mark).colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
+                res += f"{self.TAB}{ (override_mark or step.mark).colour}{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}{endl}"
         return res
             
         
