@@ -396,13 +396,45 @@ class MarkCommand(Command):
         if args.show:
             TodayCommand.run_()
 
+class ShowCommand(Command):
+    command: list[str] = ['show', 's']
+    help: str = "Show details"
 
-    # think where to store the mark (note on the task?)
-    # also steps.. are not int, more like 1.3 or something
-    # actually do we really need a done branch... i feel like it's a limitation more than anything
-    # without the done branch, you can jst edit any day, by moving the `today` branch to different days and not worry about their order
-    # upd: yes, but also having one list commit as undo can help for statistics, so we're doing that too
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmd = parser.add_subparsers(dest='kind')
         
+        project = subcmd.add_parser('project', aliases=['p'])
+        add_fuzzy_option(project, 'name')
+
+        day = subcmd.add_parser('day', aliases=['d'])
+        day.add_argument('date', type=str)
+
+    @staticmethod
+    def show_project(project: Project) -> None:
+        print(project)
+
+    @staticmethod
+    def show_day(day: Day) -> None:
+        print(day)
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        if args.kind == 'p':
+            proj = process_fuzzy_option(args, Project, 'name')
+            if proj is None: return
+            cls.show_project(proj)
+        elif args.kind == 'd':
+            date = get_date(args.date)
+            day = Day.get(date)
+            if day is None:
+                print(f"There are no records about {date}")
+                return
+            cls.show_day(day)
+            
+            
                 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='Gitodo')
