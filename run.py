@@ -1,3 +1,6 @@
+from colorama import Fore as f
+from colorama import Style as s
+
 import subprocess
 import os
 from typing import TypeAlias
@@ -28,10 +31,12 @@ def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedP
     proc = subprocess.run(cmd, capture_output=True, text=True)
     proc.stdout = proc.stdout.strip()
     proc.stderr = proc.stderr.strip()
-    if RUN_CMD_DEBUG:
-        debug_proc(proc)
-    if proc.returncode != 0 and do_raise:
+    if RUN_CMD_DEBUG: debug_proc(proc)
+    if RUN_CMD_DEBUG and proc.returncode != 0 and do_raise:
         raise RunException(f"# Failed to execute {cmd}:\n{proc.stderr}")
+    elif proc.returncode != 0 and do_raise:
+        print(f"{f.LIGHTRED_EX}# Failed to execute {s.RESET_ALL}{cmd}:\n{f.LIGHTYELLOW_EX}{s.BRIGHT}{proc.stderr}{s.RESET_ALL}")
+        exit(0)
     return proc
 
 def run_cmd(cmd: list[str], do_raise: bool = True) -> str:
@@ -43,5 +48,5 @@ def run_cmd_if(cmd: list[str], do_raise: bool = True) -> bool:
 def run_cmd_(cmd: str, do_raise: bool = True) -> str:
     return run_cmd(cmd.split(), do_raise)
 
-def get_date(date: str="today") -> str:
-    return run_cmd(['date', '--date', date, '+%x'])
+def get_date(date: str="today", do_raise: bool=True) -> str:
+    return run_cmd(['date', '--date', date, '+%x'], do_raise)
