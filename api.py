@@ -340,10 +340,8 @@ class WakeUpCommand(Command):
         if date == prev_date:
             print(f"Already on {date}")
             return
-        git.switch_reset(rb.TODAY, rb.DAYS_STORAGE)
-        git.commit(f"[i] {date}")
-        git.commit(f"[m] {date}")
-        rbl.days.append(rb.TODAY)
+        Day.create_or_get(date)
+
         
 
 class UnfocusCommand(Command):

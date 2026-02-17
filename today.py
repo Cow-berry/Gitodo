@@ -2,6 +2,7 @@ from typing import LiteralString, override
 from commit import ListCommit, ListBranch, rb
 from task import Project, Task, Mark
 from pretty import rainbow, rgb, endl
+from commit import rbl
 import git
 
 from colorama import Fore as f
@@ -10,8 +11,8 @@ from colorama import Style as s
 class Day(ListCommit):
     TAB: LiteralString = ' '*2
     
-    def __init__(self, hash: str):
-        super().__init__(hash)
+    def __init__(self, mut_hash: str):
+        super().__init__(mut_hash)
 
     @property
     def date(self) -> str:
@@ -28,6 +29,24 @@ class Day(ListCommit):
 
     def get_task_by_num(self, n: int) -> Task:
         return self.get_tasks()[n]
+
+    @staticmethod
+    def get(date: str) -> Day | None:
+        day_hashes = rbl.days.items
+        days = [Day(hash) for hash in day_hashes]
+        days = [day for day in days if day.date == date]
+        return days[0] if days else None
+
+    @classmethod
+    def create_or_get(cls, date: str) -> Day:
+        day = cls.get(date)
+        if day: return day
+        
+        git.switch_reset(rb.TODAY, rb.DAYS_STORAGE)
+        git.commit(f"[i] {date}")
+        hash = git.commit_hash(f"[m] {date}")
+        rbl.days.append(rb.TODAY)
+        return Day(hash)
 
     def __contains__(self, item: str) -> bool:
         return item in self.get_task_hashes()        
