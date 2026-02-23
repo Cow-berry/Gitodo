@@ -1,3 +1,4 @@
+from functools import cache
 import git
 import pretty
 from pretty import rgb
@@ -14,75 +15,45 @@ import json
 def generate_note(**kwargs: Any) -> str:
     return json.dumps(kwargs)
 
-
-
-
-@dataclass
-class Category:
+class StoredTask:
     hash: str
     path: str
-    name: str
 
-    COLOUR: str = f.LIGHTMAGENTA_EX
-    LIST_BRANCH: str = rb.CATEGORIES
+    COLOUR: str
+    LIST_BRANCH: str
 
-    def __init__(self, hash: str, path: str, **_: dict[str, Any]) -> None:
-        self.hash = hash
-        self.path = path
-        self.name = self.path.split('.')[-1]
-
-    @override
-    def __str__(self) -> str:
-        return f"{f.LIGHTYELLOW_EX}{self.name} ({self.path}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
-
-    @property
-    def display(self) -> str:
-        return f"{self.COLOUR}{self.name} ({self.path.replace('.', ' -> ')})"
-
-    @staticmethod
-    def is_subcat(a_str: str, b_str: str) -> bool:
-        a = a_str.split('.')
-        b = b_str.split('.')
-        if len(a) <= len(b):
-            return False
-        return all([ax == bx for ax, bx in zip(a, b)])
-        
-    
     @classmethod
-    def process_note(cls, hash: str, note: str, **kwargs: dict[str, Any]) -> Self:
+    @cache
+    def get_existing(cls, hash: str | None = None, archived: bool=False) -> list[Self]:
+        tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
+        return cls.get_by_hashes(tuple(tasks))
+
+    @classmethod
+    @cache
+    def get_by_hashes(cls, hashes: list[str], archived: bool=False) -> list[Self]:
+        # for hash, note in zip(hashes, git.notes_show_list(cls.get_notes_hashes(hashes))):
+            # print("PROCESSING NOTE")
+            # return [cls.process_note(hash, note, archived=archived)]
+        return [cls.process_note(hash, note, archived=archived) for hash, note in zip(hashes, git.notes_show_list(cls.get_notes_hashes(hashes)))]
+
+    @classmethod
+    def get_notes_hashes(cls, hashes: list[str]) -> list[str]:
+        return hashes
+
+    @classmethod
+    def process_note(cls, hash: str, note: str, **kwargs: Any) -> Self:
         args = json.loads(note)
         args.update({'hash': hash, **kwargs})
         return cls(**args)
 
-    @classmethod
-    def get_by_hashes(cls, hashes: list[str]) -> list[Self]:
-        return [cls.process_note(hash, note) for hash, note in zip(hashes, git.notes_show_list(hashes))]
-
-    @classmethod
-    def get_existing(cls, hash: str | None = None) -> list[Self]:
-        tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
-        return cls.get_by_hashes(tasks)
-
-    @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None) -> list[Self]:
-        return [task for task in cls.get_existing(hash) if cond(path_name, task.path)]
     
-    # supposes that tasks have unique names..
-    # deprecated
-    @classmethod
-    def get_existing_dict(cls, hash: str | None = None) -> dict[str, Self]:
-        return {task.path: task for task in cls.get_existing(hash)}
-
-    # deprecated
-    # category only, since they're unique
-    # maybe rename appropriately
-    @classmethod
-    def get_by_name(cls, name: str, hash: str | None = None) -> Self | None:
-        return cls.get_existing_dict(hash).get(name)
+class StoredTaskList(StoredTask):
+    LIST_BRANCH: str
+    
 
     @classmethod
-    def exists(cls, name: str) -> bool:
-        return name in cls.get_existing_dict()
+    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None, archived: bool=False) -> list[Self]:
+        return [task for task in cls.get_existing(hash, archived) if cond(path_name, task.path)]
 
     @classmethod
     def pick(cls, name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None, force_menu: bool=False) -> Self | None:
@@ -124,8 +95,58 @@ class Category:
             return None
         return cls.partial_pick(search, hash=hash, force_menu=force_menu)
 
+
+class Category(StoredTaskList):
+    hash: str
+    path: str
+    name: str
+
+    COLOUR: str = f.LIGHTMAGENTA_EX
+    LIST_BRANCH: str = rb.CATEGORIES
+
+    def __init__(self, hash: str, path: str, **_: dict[str, Any]) -> None:
+        self.hash = hash
+        self.path = path
+        self.name = self.path.split('.')[-1]
+
+    @override
+    def __str__(self) -> str:
+        return f"{f.LIGHTYELLOW_EX}{self.name} ({self.path}) {s.DIM}[{self.hash[:8]}]{s.RESET_ALL}"
+
+    @property
+    def display(self) -> str:
+        return f"{self.COLOUR}{self.name} ({self.path.replace('.', ' -> ')})"
+
+    @staticmethod
+    def is_subcat(a_str: str, b_str: str) -> bool:
+        a = a_str.split('.')
+        b = b_str.split('.')
+        if len(a) <= len(b):
+            return False
+        return all([ax == bx for ax, bx in zip(a, b)])
+        
     @classmethod
-    def get_or_create(cls, name: str, *_: list[Any]) -> Self:
+    def get_existing_dict(cls, hash: str | None = None) -> dict[str, Self]:
+        return {task.path: task for task in cls.get_existing(hash)}
+
+    @classmethod
+    def get_by_name(cls, name: str, hash: str | None = None) -> Self | None:
+        return cls.get_existing_dict(hash).get(name)
+
+    @classmethod
+    def exists(cls, name: str) -> bool:
+        return name in cls.get_existing_dict()
+
+    # @classmethod
+    # def index_by_name(cls, name: str, hash: str| None = None) -> Self:
+    #     obj = cls.get_by_name(name, hash)
+    #     if obj is None:
+    #         raise Exception("Unreachable")
+    #     return obj
+    
+
+    @classmethod
+    def create(cls, name: str) -> Self:
         existing_paths: dict[str, Self] = cls.get_existing_dict()
         if name in existing_paths:
             return existing_paths[name]
@@ -139,27 +160,23 @@ class Category:
         git.switch(rb.CRAWL)
         git.reset(reset_hash)
 
+        hash: str = ''
         for cat_name in cat_names:
             hash = git.commit_hash(cat_name)
             git.notes_add(hash, generate_note(path=cat_name))
             rbl.categories.append(hash)
             git.switch(rb.CRAWL)
 
-        return cls.get_existing_dict()[name]
-
-    @classmethod
-    def create(cls, name: str) -> None:
-        cls.get_or_create(name)
-        
+        return cls.process_note(hash, generate_note(path=name))
 
 @final
-class Project(Category):
+class Project(StoredTaskList):
     category: str
     archived: bool
     
-    COLOUR = f.LIGHTCYAN_EX
-    LIST_BRANCH = rb.PROJECTS
-    DELIMITER = ""
+    COLOUR: str = f.LIGHTCYAN_EX
+    LIST_BRANCH: str = rb.PROJECTS
+    DELIMITER: str = ""
 
     def __init__(self, hash: str, category: str="FALLBACK", name: str="FALLBACK", archived: bool=False, **_: Any):
         self.hash = hash
@@ -179,62 +196,37 @@ class Project(Category):
     def project_root(self) -> str:
         return git.get_parents(self.hash)[0]
 
-    @override
-    @classmethod
-    def get_list_by_name(cls, path_name: str, cond: Callable[[str, str], bool] = lambda a, b: a == b, hash: str | None = None, archived: bool=False) -> list[Self]:
-        return [task for task in cls.get_existing(hash, archived) if cond(path_name, task.name)]
     
     @classmethod
     def get_by_root(cls, hash: str) -> Project:
-        note = git.notes_show(hash)
-        root = cls.process_note(hash, note)
-        proj_list = cls.get_list_by_name(root.name)
-        archived_proj_list = cls.get_list_by_name(root.name, hash=rb.ARCHIVED_PROJECTS, archived=True)
+        root = cls.process_note(hash, git.notes_show(hash))
+        proj_list = cls.get_list_by_name(root.path)
+        archived_proj_list = cls.get_list_by_name(root.path, hash=rb.ARCHIVED_PROJECTS, archived=True)
         return [proj for proj in proj_list + archived_proj_list if proj.project_root == hash][0]
 
-    # doesn't process archive yet
     @classmethod
     def get_by_roots(cls, hashes: list[str]) -> list[Project]:
-        roots = [cls.process_note(hash, note) for hash, note in zip(hashes, git.notes_show_list_doubles(hashes))]
-        name_proj = {proj.name: proj for proj in cls.get_existing()}
-        return [name_proj[proj.name] for proj in roots]
-        
-        # name_root_dict = {proj.name: proj.hash for proj in roots}
-        # return [proj for proj in cls.get_existing() if proj.name in name_root_dict and proj.project_root == name_root_dict[proj.name]]
+        doubles = len(set(hashes)) != len(hashes)
+        if not doubles:
+            notes = git.notes_show_list(hashes)
+        else:
+            notes = git.notes_show_list_doubles(hashes)
+        roots = [cls.process_note(hash, note) for hash, note in zip(hashes, notes)]
+        proj_list = cls.get_existing() + cls.get_existing(rb.ARCHIVED_PROJECTS, True)
+        root_proj = {
+            parents[0]: proj
+            for proj, parents in zip(
+                    proj_list,
+                    git.get_parents_lists([proj.hash for proj in proj_list]))}
+        return [root_proj[root.hash] for root in roots]
 
     @override
     @classmethod
-    def get_existing(cls, hash: str | None = None, archived: bool= False) -> list[Self]:
-        tasks = git.get_parents(hash or cls.LIST_BRANCH)[1:]
-        task_notes = [git.get_parents(task)[0] for task in tasks]
-        return [cls.process_note(hash, note, archived=archived) for hash, note in zip(tasks, git.notes_show_list(task_notes))]
+    def get_notes_hashes(cls, hashes: list[str]) -> list[str]:
+        return [parents[0] for parents in git.get_parents_lists(hashes)]
+        # return [git.get_parents(hash)[0] for hash in hashes]
 
-    # deprecated
-    @classmethod
-    def pick_project(cls, name: str) -> Project | None:
-        projects: list[Project] = Project.get_list_by_name(name)
-        if len(projects) == 0:
-            return None
-        elif len(projects) == 1:
-            return  projects[0]
-        
-        print("Choose one of these projects:")
-        for i, p in enumerate(projects):
-            print(f"{i}. {p.path}")
-            
-        while True:
-            inp = input(f"Enter number in [0, {len(projects)-1}]: ")
-            if not inp.isdecimal():
-                print("Not a number")
-                continue
-            index = int(inp)
-            if index < 0 or index >= len(projects):
-                print("Out of range")
-                continue
-            break
-        return projects[index]
 
-    @override
     @classmethod
     def create(cls, name: str, cat: Category) -> None: # type: ignore
         # parent_cat = Category.get_or_create(parent)
@@ -247,7 +239,7 @@ class Project(Category):
         rbl.projects.append(mut_hash)
 
 @final
-class Step(Category):
+class Step(StoredTask):
     category: str
     project: str
     name: str
@@ -261,7 +253,6 @@ class Step(Category):
         self.name = name
         self.path = f"{category}>>>{project}>>{name}"
 
-    @override
     @classmethod
     def create(cls, name: str, proj: Project) -> None: # type: ignore
         # proj = Project.pick_project(parent)
@@ -300,13 +291,15 @@ class Mark(Enum):
 @dataclass
 class Task:
     hash: str
+    root: str
     project: Project
     mark: Mark
     step_marks: dict[str, Mark] # step hash -> mark
     
     def __init__(self, hash: str) -> None:
         self.hash = hash
-        self.project = Project.get_by_root(git.get_parents(hash)[1])
+        self.root = git.get_parents(hash)[1]
+        # self.project = Project.get_by_root(git.get_parents(hash)[1])
         self.parse_note()
 
     def parse_note(self) -> None:

@@ -5,12 +5,14 @@ import subprocess
 import os
 from typing import TypeAlias
 
-RUN_CMD_DEBUG = False
-# RUN_CMD_DEBUG = True
+# RUN_CMD_DEBUG = False
+RUN_CMD_DEBUG = True
 
 GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
 os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY+".git")
+
+number_of_calls: int = 0
 
 
 def debug_proc(proc: subprocess.CompletedProcess[str]) -> subprocess.CompletedProcess[str]:
@@ -28,6 +30,8 @@ class RunException(Exception):
     pass
 
 def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedProcess[str]:
+    global number_of_calls
+    number_of_calls += 1
     proc = subprocess.run(cmd, capture_output=True, text=True)
     proc.stdout = proc.stdout.strip()
     proc.stderr = proc.stderr.strip()
@@ -37,7 +41,7 @@ def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedP
     elif proc.returncode != 0 and do_raise:
         print(f"{f.LIGHTRED_EX}# Failed to execute {s.RESET_ALL}{cmd}:\n{f.LIGHTYELLOW_EX}{s.BRIGHT}{proc.stderr}{s.RESET_ALL}")
         exit(0)
-    return proc
+    return proc;
 
 def run_cmd(cmd: list[str], do_raise: bool = True) -> str:
     return run_cmd_proc(cmd, do_raise).stdout

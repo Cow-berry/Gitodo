@@ -101,11 +101,23 @@ def get_children(parent: str, exclude: list[str] | None = None) -> list[str]:
             and child not in exclude]
 
 def get_parents(commit_hash: str, exclude: list[str] | None = None) -> list[str]:
-    if exclude is None:
-        exclude = []
+    if exclude is None: exclude = []
     return [parent
             for parent in show(commit_hash).split(' ')
-            if parent not in exclude]
+            if parent not in exclude
+    ]
+
+def get_parents_lists(commit_hashes: list[str], exclude: list[str] | None = None) -> list[list[str]]:
+    if exclude is None: exclude = []
+    return [
+        [
+            parent
+            for parent in parents.strip().split(' ')
+            if parent not in exclude
+        ]
+        for parents in show(commit_hashes).split('\n')
+        if parents.strip() != ""
+    ]
     
 def get_branches(commit_hash: str, exclude: list[str] | None = None) -> list[str]:
     if exclude is None:

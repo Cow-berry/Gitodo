@@ -1,20 +1,18 @@
 from typing import LiteralString, override
-import git
-from run import run_cmd, run_cmd_if, GITODO_DIRECTORY, get_date
-from commit import Commit, rb, rbl, ListCommit
-from task import Category, Project, Step, Task, TaskStep
+from run import get_date
+from commit import rb, rbl, ListCommit
+from task import Category, Project, Step, TaskStep, StoredTaskList
 from today import Day, Today
 import commit
-import task
 from task import Mark
 
 
 import argparse
-import os
 from colorama import Fore as f
+from colorama import Back as b
 from colorama import Style as s
 
-def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: bool=True):
+def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: bool=True): # type: ignore
     group = parser.add_mutually_exclusive_group(required=required)
     # default behaviour is fuzzy unless a flag is provided
     group.add_argument(f'fuzzy', type=str, default=None, nargs="?", metavar='fuzzy')
@@ -22,7 +20,7 @@ def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: boo
     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
     return group
 
-def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], option: str, force_menu: bool=False, hash: str | None = None) -> T | None:
+def process_fuzzy_option[T: StoredTaskList](args: argparse.Namespace, cls: type[T], option: str, force_menu: bool=False, hash: str | None = None) -> T | None:
     fuzzy = args.fuzzy_flag or args.fuzzy
     option_arg = args.__getattribute__(option)
     task = cls.full_pick(option_arg, fuzzy, hash, force_menu)
@@ -31,7 +29,7 @@ def process_fuzzy_option[T: Category](args: argparse.Namespace, cls: type[T], op
     if fuzzy:
         print(f"No {cls.__name__.lower()} with name containing {cls.COLOUR}{fuzzy}{s.RESET_ALL} found")
     else:
-        print(f"No {cls.__name__.lower()} named exactly {cls.COLOUR}{args.__getattribute__(option)}{s.RESET_ALL} found")
+        print(f"No {cls.__name__.lower()} named exactly {cls.COLOUR}{option_arg}{s.RESET_ALL} found")
     return None
 
 def process_fuzzy_optional[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> tuple[T | None, bool]:
@@ -86,7 +84,6 @@ class CreateCommand(Command):
         project = subcmds.add_parser('project', aliases=['p'])
         add_fuzzy_option(project, 'parent')
         project.add_argument('name', type=str)
-        # project.add_argument('--parent', '-p', type=str, required=True)
 
         step = subcmds.add_parser('step', aliases=['s'])
         add_fuzzy_option(step, 'parent')
@@ -122,7 +119,8 @@ class RemoveCommand(Command):
         subcmds = parser.add_subparsers(dest='task_type', required=True)
 
         category = subcmds.add_parser('category', aliases=['cat', 'c'])
-        category.add_argument('name', type=str)
+        add_fuzzy_option(category, 'name')
+        # category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
         add_fuzzy_option(project, 'name')
@@ -140,29 +138,33 @@ class RemoveCommand(Command):
 
     @staticmethod
     def remove_project(proj: Project) -> None:
+        print(f'removing project {proj.hash}')
         rbl.archived_projects.append(proj.hash)
         rbl.projects.remove(proj.hash)
         print(f"removed {Project.COLOUR}{proj.name}{s.RESET_ALL}")
 
     @classmethod
-    def remove_category(cls, name: str) -> None:
-        cat = Category.get_by_name(name)
-        if cat is None:
-            print(f"No category named {name} exists")
-            return
-        
+    def remove_category(cls, cat: Category) -> None:
+        print(f"{f.GREEN}Removing cat {cat.path} {cat.hash}{s.RESET_ALL}")
         all_projects = Project.get_existing()
 
         subcats = {p.category for p in all_projects if Category.is_subcat(p.category, cat.path)}
+        print(f"{cat.path} -> {subcats}")
         for subcat in subcats:
-            cls.remove_category(subcat)
+            subcat_obj = Category.get_by_name(subcat)
+            if subcat_obj is None:
+                print(f'skipped {subcat}')
+                continue
+            cls.remove_category(subcat_obj)
 
         projects = [p for p in all_projects if p.category == cat.path]
+        print(f"CORRESPONDING PROJECT TO {cat.path} are {[p.hash for p in projects]}")
         for project in projects:
             cls.remove_project(project)
 
 
         rbl.archived_categories.append(cat.hash)
+        print(f"Trying to remove {cat.hash}")
         rbl.categories.remove(cat.hash)
         print(f"removed {Category.COLOUR}{cat.display}{s.RESET_ALL}")
     
@@ -186,7 +188,10 @@ class RemoveCommand(Command):
             if proj is None: return
             cls.remove_project(proj)
         else:
-            cls.remove_category(args.name)
+            cat = process_fuzzy_option(args, Category, 'name', True)
+            if cat is None: return
+            cls.remove_category(cat)
+            # TODO: category is trying to get removed twice, need debugging
         
 
 class RestoreCommand(Command):
@@ -280,14 +285,16 @@ class BrowseCommand(Command):
             projects = [p for p in projects if p.category == cat.path]
         projects.sort(key=lambda p: p.category)
         prev = None
+        result: list[str] = []
         for proj in projects:
             if prev is None or proj.category != prev:
                 cat_name = proj.category.replace('.', ' -> ')
-                print(f"{Category.COLOUR}{cat_name}{s.RESET_ALL}")
+                result.append(f"{Category.COLOUR}{cat_name}{s.RESET_ALL}")
                 prev = proj.category
-            print(f"{cls.TAB}{Project.COLOUR if not proj.archived else f.LIGHTRED_EX}{proj.name}{s.RESET_ALL}")
+            result.append(f"{cls.TAB}{Project.COLOUR if not proj.archived else f.LIGHTRED_EX}{proj.name}{s.RESET_ALL}")
             for i, step in enumerate(proj.get_steps()):
-                print(f"{cls.TAB*2}{Step.COLOUR}{i}. {step.name}{s.RESET_ALL}")
+                result.append(f"{cls.TAB*2}{Step.COLOUR}{i}. {step.name}{s.RESET_ALL}")
+        print('\n'.join(result))
 
 class AssignCommand(Command):
     command: list[str] = ["assign", 'a']
@@ -356,6 +363,7 @@ class TodayCommand(Command):
         actual_date = get_date()
 
         if today_date != actual_date:
+            print(f"{s.BRIGHT}{f.LIGHTRED_EX}{"ACHTUNG:".center(38)}{s.RESET_ALL}")
             print(f"Current agenda points to {f.LIGHTRED_EX}{today_date}{s.RESET_ALL}")
             print(f"But the actual date is {f.LIGHTGREEN_EX}{actual_date}{s.RESET_ALL}")
             print(f"To switch use the `{f.LIGHTMAGENTA_EX}wakeup{s.RESET_ALL}` subcommand")
@@ -368,12 +376,13 @@ class WakeUpCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         date = get_date()
-        prev_date = Today().date
+        old_day = Today()
+        prev_date = old_day.date
         if date == prev_date:
             print(f"Already on {date}")
             return
-        Day.create_or_get(date)
-
+        new_day = Day.create_or_get(date)
+        old_day.reset(new_day)
         
 
 class UnfocusCommand(Command):

@@ -10,6 +10,7 @@ from colorama import Style as s
 
 class Day(ListCommit):
     TAB: LiteralString = ' '*2
+    BRANCH: str = rb.CRAWL
     
     def __init__(self, mut_hash: str):
         super().__init__(mut_hash)
@@ -24,6 +25,15 @@ class Day(ListCommit):
 
 
     def get_tasks(self) -> list[Task]:
+        # h = self.get_task_hashes()
+        # print('-'*50)
+        # print('CREATING TASK')
+        # print('-'*50)
+        # test_result = [Task(h[0])]
+        # print('-'*50)
+        # print('FINISHED CREATING TASK')
+        # print('-'*50)
+        # return test_result
         return [Task(hash) for hash in self.get_task_hashes()]
         # return Project.get_by_roots(self.get_task_hashes())
 
@@ -42,27 +52,27 @@ class Day(ListCommit):
         day = cls.get(date)
         if day: return day
         
-        git.switch_reset(rb.TODAY, rb.DAYS_STORAGE)
+        git.switch_reset(cls.BRANCH, rb.DAYS_STORAGE)
         git.commit(f"[i] {date}")
         hash = git.commit_hash(f"[m] {date}")
-        rbl.days.append(rb.TODAY)
+        rbl.days.append(cls.BRANCH)
         return Day(hash)
 
     def create_task(self, proj: Project) -> None:
         date = self.date
-        const_today = self.parents[0]
-        old_today = self.hash
+        const_day = self.parents[0]
+        old_day = self.hash
         
         # git.switch(rb.CRAWL)
         # git.reset(self.parents[0])
         task = git.merge_pick(
-            rb.TODAY,
+            self.branch,
             [self.parents[0], proj.project_root],
             f"@ {self.date} {proj.name}",
             False)
         git.notes_add(task, generate_note(mark=Mark.NotDone.name))
-        new_self = self.append(task)
-        rbl.days.replace(self.hash, new_self)
+        new_day = self.append(task)
+        rbl.days.replace(self.hash, new_day)
         # new_today = rbl.today.append(task)
         # rbl.days.replace(old_today, new_today)
 
@@ -77,11 +87,16 @@ class Day(ListCommit):
     @override
     def __str__(self) -> str:
         tasks: list[Task] = self.get_tasks() # raw projects without steps
+        task_roots = [task.root for task in tasks]
+        task_projects = Project.get_by_roots(task_roots)
+        
+        
         done_count = len([t for t in tasks if t.mark == Mark.Done])
         dots = ''.join([f"{t.mark.colour}●{s.RESET_ALL}" for t in tasks])
         res = rainbow(f"Agenda @ {self.date}") +  f"[{s.BRIGHT}{f.LIGHTGREEN_EX}{done_count}{s.RESET_ALL}/{len(tasks)}]:{dots}\n"
         ln = len(str(len(tasks)-1))
-        for i, task in enumerate(tasks):
+        for i, (task, project) in enumerate(zip(tasks, task_projects)):
+            task.project = project
             res += f"{task.mark.emoji()}{task.mark.colour}[{i:>{ln}}] {task.name} {rgb(*[160]*3)}({task.category}){s.RESET_ALL}{s.BRIGHT}{f.LIGHTRED_EX}{'' if not task.project.archived else " ARCHIVED "}{s.RESET_ALL}:{endl}"
             steps = task.get_steps()
             override_mark = None
@@ -95,7 +110,12 @@ class Day(ListCommit):
 
 
 class Today(Day, ListBranch):
+    BRANCH: str = rb.TODAY
+    
     def __init__(self) -> None:
         super().__init__(rb.TODAY)
+
+    def reset(self, other: Day):
+        git.switch_reset(self.branch, other.hash)
         
         

@@ -18,6 +18,10 @@ def maybe_lock_in() -> None:
 def main() -> None:
     maybe_lock_in()
     parser = api.setup_parser()
+    
+    if len(sys.argv) == 1:
+        api.TodayCommand.run(None)
+
     args = parser.parse_args(sys.argv[1:])
 
     cmd_cls: type[api.Command] | None = ([cls for cls in api.Command.__subclasses__() if args.command in cls.command] + [None])[0]
@@ -29,10 +33,11 @@ def main() -> None:
         print(f"{cmd_cls = }")
     
     if not cmd_cls:
-        print("No command was provided")
+        print("No command was provided (how did you get here)")
         exit(1)
     
     cmd_cls.run(args)
+    print(f'\nTOTAL NUMBER OF CALLS: {colorama.Fore.LIGHTRED_EX}{run.number_of_calls}{colorama.Style.RESET_ALL}')
     
 if __name__ == "__main__":
     main()
