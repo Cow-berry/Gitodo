@@ -19,8 +19,8 @@ def main() -> None:
     maybe_lock_in()
     parser = api.setup_parser()
     
-    if len(sys.argv) == 1:
-        api.TodayCommand.run(None)
+    # if len(sys.argv) == 1:
+        # api.TodayCommand.run(None)
 
     args = parser.parse_args(sys.argv[1:])
 

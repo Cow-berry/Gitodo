@@ -5,8 +5,8 @@ import subprocess
 import os
 from typing import TypeAlias
 
-# RUN_CMD_DEBUG = False
-RUN_CMD_DEBUG = True
+RUN_CMD_DEBUG = False
+# RUN_CMD_DEBUG = True
 
 GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
 os.chdir(GITODO_DIRECTORY)
