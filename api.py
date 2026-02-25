@@ -1,11 +1,10 @@
 from typing import LiteralString, override
 from run import get_date
 from commit import rb, rbl, ListCommit
-from task import Category, Project, Step, TaskStep, StoredTaskList
-from today import Day, Today
 import commit
 from task import Mark
 
+from db import Cat, Project
 from db import db
 
 
@@ -22,27 +21,10 @@ def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: boo
     group.add_argument(f'--{option}', f'-{option[0]}', type=str)
     return group
 
-def process_fuzzy_option[T: StoredTaskList](args: argparse.Namespace, cls: type[T], option: str, force_menu: bool=False, hash: str | None = None) -> T | None:
+def process_fuzzy_option(args: argparse.Namespace,  option: str) -> tuple[str | None, str | None]:
     fuzzy = args.fuzzy_flag or args.fuzzy
     option_arg = args.__getattribute__(option)
-    task = cls.full_pick(option_arg, fuzzy, hash, force_menu)
-    if task is not None:
-        return task
-    if fuzzy:
-        print(f"No {cls.__name__.lower()} with name containing {cls.COLOUR}{fuzzy}{s.RESET_ALL} found")
-    else:
-        print(f"No {cls.__name__.lower()} named exactly {cls.COLOUR}{option_arg}{s.RESET_ALL} found")
-    return None
-
-def process_fuzzy_optional[T: Category](args: argparse.Namespace, cls: type[T], option: str) -> tuple[T | None, bool]:
-    if (args.fuzzy or args.fuzzy_flag or args.__getattribute__(option)) is None:
-        return None, False
-    obj = process_fuzzy_option(args, cls, option)
-    not_found = obj is None
-    return (obj, not_found)
-    
-
-
+    return option_arg, fuzzy 
 
     
 class Command:
@@ -60,6 +42,48 @@ class Command:
     @classmethod
     def run_(cls) -> None:
         pass
+
+
+class BrowseCommand(Command):
+    command: list[str] = ["browse", 'b']
+    help: str = "show all stored tasks"
+    
+    TAB: LiteralString = ' '*2
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('--archived', '-a', dest='all', action='store_true')
+        add_fuzzy_option(parser, 'name', False)
+
+    @staticmethod
+    def get_projects(name: str | None, fuzzy: str | None, archived: bool) -> list[Project] | None:
+        projects = db.all_projects if archived else db.narch_projects
+        if name is None and fuzzy is None: return projects
+        cats = db.all_cats if archived else db.narch_cats
+        cat = db.pick(cats, name, fuzzy)
+        if cat is None: return None
+        return [project for project in projects if project.cat == cat]
+        
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        name, fuzzy = process_fuzzy_option(args, 'name')
+        archived = args.all
+        projects = cls.get_projects(name, fuzzy, archived)
+        if projects is None:
+            search_spec = "contaning" if fuzzy else "exactly"
+            print(f"Category with name {search_spec} {fuzzy or name} was not found")
+            return
+
+        cat: Cat | None = None
+        for project in projects:
+            if project.cat != cat:
+                cat = project.cat
+                print(f"{cat.name.replace('.', ' > ')}:")
+            print(f"{cls.TAB}{project.name}")
+            for i, step in enumerate(project.steps):
+                print(f"{cls.TAB}{cls.TAB}{i}. {step.name}")
 
 class InstallCommand(Command):
     command: list[str] = ['install', 'nuke']

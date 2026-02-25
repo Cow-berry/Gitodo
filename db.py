@@ -121,7 +121,29 @@ class DB:
             t_list = [t for t in t_list if fuzzy in t.name]
         else:
             t_list = [t for t in t_list if name == t.name]
-        ...
+
+        if len(t_list) == 0: return None
+        if len(t_list) == 1 and not force_menu: return t_list[0]
+
+        print("Please choose from this list:")
+        for i, t in enumerate(t_list):
+            print(f"- [{i}] {t.name}")
+
+        while True:
+            inp = input(f"Enter number in [0, {len(t_list)-1}] or q(uit): ")
+            if inp == 'q' or inp == 'quit':
+                print("Exiting")
+                return None
+            if not inp.isdecimal():
+                print("Not a number")
+                continue
+            index = int(inp)
+            if index < 0 or index >= len(t_list):
+                print("Out of range")
+                continue
+            break
+        print()
+        return t_list[index]
         
         
 
