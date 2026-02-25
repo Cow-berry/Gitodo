@@ -1,4 +1,5 @@
 import git
+import run
 
 import json
 from pprint import pprint
@@ -6,6 +7,9 @@ from dataclasses import dataclass, field
 from itertools import chain, cycle
 from more_itertools import unzip, split_into, flatten, zip_offset
 from typing import Any
+from enum import StrEnum, Enum
+from colorama import Fore as f
+from colorama import Style as s
 
 
 
@@ -55,25 +59,90 @@ class Cat:
         note = generate_note(hash=self.hash, name=self.name, archived=self.archived)
         git.notes_add(self.hash, note)
 
+class Mark(StrEnum):
+    NotDone = 'not done'
+    InProgress = 'in progress'
+    Done = 'done'
+
+# print('NotDone' in Mark._member_names_, Mark['NotDone'])
+        
+@dataclass
+class Task:
+    hash: str
+    mark: Mark
+    project: Project
+        
+@dataclass
+class Day:
+    hash: str
+    date: str
+    tasks: list[Task]
+        
 class DB:
+    actual_date: str
     cats_name: dict[str, Cat]
     cats: dict[str, Cat]
     steps: dict[str, Step]
     projects: dict[str, Project]
+    projects_root: dict[str, Project]
+    tasks: dict[str, Task]
+    days: dict[str, Day]
+
+    all_cats: list[Cat]
+    arch_cats: list[Cat]
+    narch_cats: list[Cat]
+    
+    all_projects: list[Project]
+    arch_projects: list[Project]
+    narch_projects: list[Project]
     
     def __init__(self):
         self.cats = dict()
         self.cats_name = dict()
         self.steps = dict()
         self.projects = dict()
+        self.projects_root = dict()
+        self.tasks = dict()
+        self.days = dict()
+        
         self.precompute()
 
+        self.all_cats = list(self.cats.values())
+        self.arch_cats = [cat for cat in self.all_cats if cat.archived]
+        self.narch_cats = [cat for cat in self.all_cats if not cat.archived]
+        
+        self.all_projects = list(self.projects.values())
+        self.arch_projects = [proj for proj in self.all_projects if proj.archived]
+        self.narch_projects = [proj for proj in self.all_projects if not proj.archived]
+
+    def pick[T: Project | Cat](self, t_list: list[T], name: str | None, fuzzy: str | None, force_menu: bool = False) -> T | None:
+        if name is None and fuzzy is None: return None
+        if fuzzy:
+            t_list = [t for t in t_list if fuzzy in t.name]
+        else:
+            t_list = [t for t in t_list if name == t.name]
+        ...
+        
+        
+
     def precompute(self):
+        branch_names = ['categories', 'archived-categories', 'projects', 'archived-projects', 'days', 'today']
+        hashes = git.show(branch_names, pretty="%H %P").split('\n\n')
+        
+        cat_hashes, archcat_hashes, project_hashes, archproject_hashes, day_hashes, today = [x.split(' ') for x in hashes]
+        cat_hashes = cat_hashes[2:]
+        archcat_hashes = archcat_hashes[2:]
+        project_hashes = project_hashes[2:]
+        archproject_hashes = archproject_hashes[2:]
+        day_hashes = day_hashes[2:]
+        today = today[0]
+
+
+        self.actual_date = run.get_date()
+
         # :Categories:
         
-        cat_hashes, archcat_hashes = [
-            x.split(' ')[1:]
-            for x in git.show(['categories', 'archived-categories']).split('\n\n')]
+
         parent_names = [x.split(' ', 1) for x in git.show(cat_hashes + archcat_hashes, pretty="%P %N").split('\n\n')]
         
         offset = len(cat_hashes)
@@ -96,8 +165,6 @@ class DB:
         
         # :Projects:
         
-        project_hashes, archproject_hashes = [x.split(' ')[1:] for x in git.show(['projects', 'archived-projects']).split('\n\n')]
-        # roots_fl, steps_list = unzip([list(split_into(x.split(' '), [1, None])) for x in git.show(project_hashes + archproject_hashes).split('\n') if x != ''])
         root_step = [x.split(' ') for x in git.show(project_hashes + archproject_hashes).split('\n') if x != '']
         steps_list = [x[1:] for x in root_step]
         # :Steps:
@@ -130,9 +197,37 @@ class DB:
             steps = [self.steps[hash] for hash in steps]
             project = Project(hash, root, name, cat, archived, steps)
             self.projects[hash] = project
+            self.projects_root[root] = project
             cat.projects.append(project)
+            
+
+        # :Days:
+        day_tasks = [x.split(":") for x in git.show(day_hashes, pretty="%H:%s:%P").split('\n\n')]
+
+        # :Tasks:
+        task_hashes = list(flatten([x[2].split(' ')[1:] for x in day_tasks]))
+        tasks = [x.split('\n', 1) for x in git.show(task_hashes, pretty="%P%n%N").split('\n\n\n')]
+        for hash, (parents, info_json) in zip(task_hashes, tasks):
+            info = json.loads(info_json)
+            mark = info.get('mark') or Mark.NotDone
+            project_hash = parents.split(' ')[1]
+            project = self.projects_root[project_hash]
+            task = Task(hash, mark, project)
+            self.tasks[hash] = task
+
+        # :Days: again
+
+        for hash, subject, parents in day_tasks:
+            date = subject[4:]
+            tasks = [self.tasks[hash] for hash in parents.split(' ')[1:]]
+            day = Day(hash, date, tasks)
+            self.days[date] = day
+        
 
 db = DB()
+# pprint(db.days)
+
+print(f"[DB] Number of calls: {f.LIGHTRED_EX}{run.number_of_calls}{s.RESET_ALL}")
 
 
 
