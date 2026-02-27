@@ -1,10 +1,11 @@
-from typing import LiteralString, override
+from enum import StrEnum
+from typing import Callable, ClassVar, LiteralString, override
 from run import get_date
 from commit import rb, rbl, ListCommit
 import commit
-from task import Mark
+from task import Category, Mark
 
-from db import Cat, Project
+from db import Cat, Project, Day, paint, red, yellow, green
 from db import db
 
 
@@ -70,11 +71,75 @@ class Command:
         pass
 
 
+class CreateCommand(Command):
+    command: list[str] = ['create', 'c']
+    help: str = "Creates a task"
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
+
+        category = subcmds.add_parser('category', aliases=['c'])
+        category.add_argument('name', type=str)
+
+        project = subcmds.add_parser('project', aliases=['p'])
+        add_fuzzy_option(project, 'parent')
+        project.add_argument('name', type=str)
+
+        step = subcmds.add_parser('step', aliases=['s'])
+        add_fuzzy_option(step, 'parent')
+        step.add_argument('name', type=str)
+        
+    @classmethod
+    @override
+    def run(cls, args: argparse.Namespace) -> None:
+        task_type: str = args.task_type
+        if task_type.startswith('c'):
+            cats_created = db.create_multiple_categories(args.name)
+            if cats_created == 0:
+                report(warning, Category, rd.AlreadyExists, paint(args.name, Cat.COLOR))
+                return
+            [success(f"Created category {paint(cat.detailed_name(), Cat.COLOR)}") for cat in db.narch_cats[-cats_created:]]
+        elif task_type.startswith('p'):
+            name, fuzzy = process_fuzzy_option(args, 'parent')
+            cat = db.pick(db.narch_cats, name, fuzzy)
+            if cat is None:
+                report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
+                return
+            existing_project = db.create_project(args.name, cat)
+            if existing_project is not None:
+                report(error, Project, rd.AlreadyExists, f"{paint(args.name, Project.COLOR)} under category {paint(cat.name, Cat.COLOR)}")
+                print()
+                ShowCommand.show_project(existing_project)
+        else:
+            name, fuzzy = process_fuzzy_option(args, 'parent')
+            project = db.pick(db.narch_projects, name, fuzzy)
+            if project is None:
+                report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
+                return
+            db.create_step(args.name, project)
+      
+class WakeUpCommand(Command):
+    command: list[str] = ["wakeup"]
+    help: str = "Update the agenda to show the curret day"
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        existing_day = db.create_day(db.call_date('today'))
+        if existing_day is not None:
+            # report_already_exists
+            return
+
+
+    
+
 class BrowseCommand(Command):
     command: list[str] = ["browse", 'b']
     help: str = "show all stored tasks"
     
-    TAB: LiteralString = ' '*2
+    TAB: ClassVar[str] = ' '*2
 
     @override
     @staticmethod
@@ -89,7 +154,7 @@ class BrowseCommand(Command):
         cats = db.all_cats if archived else db.narch_cats
         cat = db.pick(cats, name, fuzzy)
         if cat is None: return None
-        return [project for project in projects if project.cat == cat]
+        return [project for project in projects if project.cat.is_subcat(cat)]
         
     @override
     @classmethod
@@ -106,11 +171,78 @@ class BrowseCommand(Command):
         for project in projects:
             if project.cat != cat:
                 cat = project.cat
-                print(f"{cat.name.replace('.', ' > ')}:")
-            print(f"{cls.TAB}{project.name}")
+                print(f"{paint(cat.name.replace('.', ' > '), cat.COLOR)}:")
+            print(f"{cls.TAB}{paint(project.name, project.COLOR)}")
             for i, step in enumerate(project.steps):
-                print(f"{cls.TAB}{cls.TAB}{i}. {step.name}")
+                print(paint(f"{cls.TAB}{cls.TAB}{i}. {step.name}", step.COLOR))
 
+class TodayCommand(Command):
+    command: list[str] = ["today", 't']
+    help: str = "Show today's agenda"
+
+    TAB: LiteralString = " "*3
+
+    @override
+    @classmethod
+    def run_(cls) -> None:
+        print(db.today.agenda())
+
+        if db.today.date != db.actual_date:
+            print()
+            print(f"{s.BRIGHT}{f.LIGHTRED_EX}{"ACHTUNG:".center(38)}{s.RESET_ALL}")
+            print(f"Current agenda points to {f.LIGHTRED_EX}{db.today.date}{s.RESET_ALL}")
+            print(f"But the actual date is {f.LIGHTGREEN_EX}{db.actual_date}{s.RESET_ALL}")
+            print(f"To switch use the `{f.LIGHTMAGENTA_EX}wakeup{s.RESET_ALL}` subcommand")
+            print()
+
+
+class ShowCommand(Command):
+    command: list[str] = ['show', 's']
+    help: str = "Show details"
+
+    TAB: ClassVar[str] = ' '*2
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmd = parser.add_subparsers(dest='kind', required=True)
+        
+        project = subcmd.add_parser('project', aliases=['p'])
+        parser.add_argument('--archived', '-a', dest='all', action='store_true')
+        add_fuzzy_option(project, 'name')
+
+        day = subcmd.add_parser('day', aliases=['d'])
+        day.add_argument('date', type=str)
+
+    @classmethod
+    def show_project(cls, project: Project):
+        print(paint("Showing project", f.LIGHTGREEN_EX))
+        print(f"{paint(project.name, project.COLOR)}")
+        for i, step in enumerate(project.steps):
+            print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        if args.kind == 'p':
+            name, fuzzy = process_fuzzy_option(args, 'name')
+            proj_list = db.all_projects if args.all else db.narch_projects
+            project = db.pick(proj_list, name, fuzzy)
+            if project is None:
+                search_spec = "contaning" if fuzzy else "exactly"
+                print(f"Project with name {search_spec} {fuzzy or name} was not found")
+                return
+            cls.show_project(project)
+        elif args.kind == 'd':
+            date = db.call_date(args.date)
+            day = db.days.get(date)
+            if day is None:
+                print(f"There are no records about {date}")
+                return
+            print(day.agenda())
+
+
+            
 class InstallCommand(Command):
     command: list[str] = ['install', 'nuke']
     help: str = "Sets up the git environment"
