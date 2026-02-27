@@ -26,6 +26,32 @@ def process_fuzzy_option(args: argparse.Namespace,  option: str) -> tuple[str | 
     option_arg = args.__getattribute__(option)
     return option_arg, fuzzy 
 
+
+def error(text: str) -> None:
+    print(red(f"Error: ") + text)
+
+def warning(text: str) -> None:
+    print(yellow("Warning: ") + text)
+
+def success(text: str) -> None:
+    print(green("Success: ") + text)
+
+class ReportDetail(StrEnum):
+    NotFound = "not found"
+    AlreadyExists = "already exists"
+
+rd = ReportDetail
+
+def report(func: Callable[[str], None], cls: type[object], detail: ReportDetail, text: str) -> None:
+    kind = "Category" if cls == Cat else cls.__name__
+    func(f"{kind} {text} {detail}")
+    
+
+def report_fuzzy[T: Cat | Project](func: Callable[[str], None], cls: type[T], detail: ReportDetail, name: str | None, fuzzy: str | None) -> None:
+    search_spec = "contaning" if fuzzy is not None else "exactly"
+    text = f"with name {search_spec} {paint(fuzzy or name, cls.COLOR)}"
+    report(func, cls, detail, text)
+    
     
 class Command:
     command: list[str] = []

@@ -24,10 +24,27 @@ Error = "Error"
 def generate_note(**kwargs: Any) -> str:
     return json.dumps(kwargs)
 
+def paint(text: Any, *fores: str) -> str:
+    return f"{''.join(fores)}{str(text)}{s.RESET_ALL}"
+
+def red(text: str) -> str:
+    return paint(text, f.LIGHTRED_EX)
+
+def yellow(text: str) -> str:
+    return paint(text, f.LIGHTYELLOW_EX)
+
+def green(text: str) -> str:
+    return paint(text, f.LIGHTGREEN_EX)
+
+def rgb(r: int, g: int, b: int) -> str:
+    return f"\x1b[38;2;{r};{g};{b}m"
+
 @dataclass
 class Step:
     hash: str
     name: str
+
+    COLOR: ClassVar[str] = s.BRIGHT + s.DIM + f.CYAN
 
     def sync(self) -> None:
         note = generate_note(hash=self.hash, name=self.name)
