@@ -54,3 +54,6 @@ def run_cmd_(cmd: str, do_raise: bool = True) -> str:
 
 def get_date(date: str="today", do_raise: bool=True) -> str:
     return run_cmd(['date', '--date', date, '+%x'], do_raise)
+
+def get_date_proc(date: str="today", do_raise: bool=True) -> subprocess.CompletedProcess[str]:
+    return run_cmd_proc(['date', '--date', date, '+%x'], do_raise)

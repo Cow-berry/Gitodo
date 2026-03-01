@@ -62,7 +62,6 @@ class Project:
     archived: bool = field(default=False)
     steps: list[Step] = field(default_factory=lambda: [])
 
-    i = 20
     COLOR: ClassVar[str] = f.LIGHTCYAN_EX
 
     def sync(self) -> None:
@@ -76,11 +75,11 @@ class Project:
         return hash, parents, message
 
     @classmethod
-    def get_list_merge(cls, hash: str, projects: list[Project]) -> tuple[str, list[str], str]:
-        project_hashes = [project.hash for project in projects]
+    def get_list_merge(cls) -> tuple[str, list[str], str]:
+        project_hashes = [project.hash for project in db.all_projects]
         parents = [rb.TASK_STORAGE] + project_hashes
         message = 'All projects'
-        return hash, parents, message
+        return rb.PROJECTS, parents, message
 
     @property
     def commit_name(self) -> str:
@@ -104,12 +103,13 @@ class Cat:
         note = generate_note(hash=self.hash, name=self.name, archived=self.archived)
         git.notes_add(self.hash, note)
 
+
     @classmethod
-    def get_list_merge(cls, hash: str, cats: list[Cat]) -> tuple[str, list[str], str]:
-        cat_hashes = [cat.hash for cat in cats]
+    def get_list_merge(cls) -> tuple[str, list[str], str]:
+        cat_hashes = [cat.hash for cat in db.all_cats]
         parents = [rb.TASK_STORAGE] + cat_hashes
         message = 'All categories'
-        return hash, parents, message
+        return rb.CATEGORIES, parents, message
 
     def is_subcat(self, other: Cat) -> bool:
         a = self.name.split('.')
@@ -124,9 +124,9 @@ class Cat:
         return f"{name} ({self.name.replace('.', ' -> ')})"
 
 class Mark(StrEnum):
-    NotDone = 'not done'
-    InProgress = 'in progress'
-    Done = 'done'
+    NotDone = 'NotDone'
+    InProgress = 'InProgress'
+    Done = 'Done'
 
     def emoji(self) -> str:
         match self:
@@ -145,9 +145,13 @@ class Mark(StrEnum):
 @dataclass
 class Task:
     hash: str
-    mark: Mark
-    project: Project
+    project: Project | None
+    mark: Mark = field(default=Mark.NotDone)
     step_marks: dict[str, Mark] = field(default_factory=lambda: dict())
+
+    def sync(self) -> None:
+        note = generate_note(mark=self.mark)
+        git.notes_add(self.hash, note)
 
         
 @dataclass
@@ -158,6 +162,12 @@ class Day:
     tasks: list[Task] = field(default_factory=lambda: [])
 
     TAB: ClassVar[str] = ' '*4
+
+    def get_merge(self) -> tuple[str, list[str], str]:
+        hash = self.hash
+        parents = [self.root] + [task.hash for task in self.tasks]
+        message =  f"[m] {self.date}"
+        return hash, parents, message
 
     @classmethod
     def get_list_merge(cls) -> tuple[str, list[str], str]:
@@ -222,8 +232,6 @@ class DB:
     actual_date: str
     task_storage: str
 
-    all_cats: list[Cat]
-    all_projects: list[Project]
     
     def __init__(self):
         self.cats = dict()
@@ -237,11 +245,21 @@ class DB:
         
         self.precompute()
 
-        self.all_cats = list(self.cats.values())
-        self.all_projects = list(self.projects.values())
-        self.sort()
-
     # It's actually not costly to compute these every time now
+        
+    @property
+    def all_projects(self) -> list[Project]:
+        result = list(self.projects.values())
+        result.sort(key=lambda project: project.mtime)
+        result.sort(key=lambda project: project.cat.name)
+        return result
+        
+
+    @property
+    def all_cats(self) -> list[Cat]:
+        result = list(self.cats.values())
+        result.sort(key=lambda cat: cat.name)
+        return result
 
     @property
     def arch_projects(self) -> list[Project]:
@@ -259,25 +277,17 @@ class DB:
     def narch_cats(self) -> list[Cat]:
         return [cat for cat in self.all_cats if not cat.archived]
 
-    def sort(self):
-        self.all_cats.sort(key=lambda cat: cat.name)
-        self.all_projects.sort(key=lambda project: project.mtime)
-        self.all_projects.sort(key=lambda project: project.cat.name)        
-
     def _store_cat(self, cat: Cat) -> None:
         self.cats_name[cat.name] = cat
         self.cats[cat.hash] = cat
         if cat.parent in self.cats:
             self.cats[cat.parent].subcats.append(cat)
-        self.all_cats.append(cat)
         
     def _unstore_cat(self, cat: Cat) -> None:
         self.cats_name.pop(cat.name)
         self.cats.pop(cat.hash)
         if cat.parent in self.cats:
             self.cats[cat.parent].subcats.remove(cat)
-        self.all_cats.remove(cat)
-
         
     def _store_project(self, project: Project) -> None:
         self.projects[project.hash] = project
@@ -286,7 +296,6 @@ class DB:
             self.projects_name[project.name] = [project]
         else:
             self.projects_name[project.name].append(project)
-        self.all_projects.append(project)
         project.cat.projects.append(project)
 
     def _unstore_project(self, project: Project) -> None:
@@ -297,7 +306,6 @@ class DB:
             self.projects_name.pop(project.name)
         elif name_list is not None:
             self.projects_name[project.name].remove(project)
-        self.all_projects.remove(project)
         project.cat.projects.remove(project)
 
     def _store_step(self, step: Step, parent: Project) -> None:
@@ -314,11 +322,13 @@ class DB:
     def _unstore_day(self, day: Day) -> None:
         self.days.pop(day.date)
 
-    def _store_task(self, task: Task) -> None:
+    def _store_task(self, task: Task, day: Day) -> None:
         self.tasks[task.hash] = task
+        day.tasks.append(task)
         
-    def _unstore_task(self, task: Task) -> None:
+    def _unstore_task(self, task: Task, day: Day) -> None:
         self.tasks.pop(task.hash)
+        day.tasks.remove(task)
 
 
 
@@ -326,6 +336,12 @@ class DB:
         
     def call_date(self, date: str) -> str:
         return run.get_date(date)
+
+    def call_date_maybe(self, date: str) -> tuple[str | None, str]:
+        proc = run.get_date_proc(date, False)
+        if proc.returncode != 0:
+            return None, proc.stderr
+        return proc.stdout, ""
 
     def create_multiple_categories(self, path: str) -> int:
         parts = path.split('.')
@@ -354,10 +370,43 @@ class DB:
             parent = hash
             result += 1
 
-        upd_cats = git.merge_pick(*Cat.get_list_merge(rb.CATEGORIES, self.narch_cats))
+        upd_cats = git.merge_pick(*Cat.get_list_merge())
         git.switch_reset(rb.CATEGORIES, upd_cats)
-        self.sort()
         return result
+
+    def remove_category(self, cat: Cat) -> None:
+        for subcat in cat.subcats[:]:
+            self.remove_category(subcat)
+
+        for project in cat.projects[:]:
+            self.remove_project(project)
+
+        print("Removing category " + paint(cat.name, Cat.COLOR))
+        self._unstore_cat(cat)
+        upd_categories = git.merge_pick(*Cat.get_list_merge(), False)
+        git.switch_reset(rb.CATEGORIES, upd_categories)
+
+    def archive_cat(self, cat: Cat) -> None:
+        for subcat in cat.subcats:
+            self.archive_cat(subcat)
+        
+        for project in cat.projects:
+            self.archive_project(project)
+
+        print("Archiving category " + paint(cat.name, Cat.COLOR))
+        cat.archived = True
+        cat.sync()
+
+    def restore_cat(self, cat: Cat) -> None:
+        for subcat in cat.subcats:
+            self.restore_cat(subcat)
+        
+        for project in cat.projects:
+            self.restore_project(project)
+
+        print("Restoring category " + paint(cat.name, Cat.COLOR))
+        cat.archived = False
+        cat.sync()
 
     def create_project(self, name: str, parent: Cat) -> Project | None:
         preexisting = self.projects_name.get(name)
@@ -373,10 +422,28 @@ class DB:
         project = Project(mut_hash, const_hash, name, parent, datetime.datetime.now().isoformat())
         project.sync()
         self._store_project(project)
-        upd_projects = git.merge_pick(*Project.get_list_merge(rb.PROJECTS, self.narch_projects))
+        upd_projects = git.merge_pick(*Project.get_list_merge())
         git.switch_reset(rb.PROJECTS, upd_projects)
-        self.sort()
         return None
+
+        
+
+    def remove_project(self, project: Project) -> None:
+        print("Removing project " + paint(project.name, Project.COLOR))
+        self._unstore_project(project)
+        upd_projects = git.merge_pick(*Project.get_list_merge(), False)
+        git.switch_reset(rb.PROJECTS, upd_projects)
+
+    def archive_project(self, project: Project) -> None:
+        print("Archiving project " + paint(project.name, Project.COLOR))
+        project.archived = True
+        project.sync()
+
+    def restore_project(self, project: Project) -> None:
+        print("Restoring project " + paint(project.name, Project.COLOR))
+        project.archived = False
+        project.sync()
+        
 
     def create_step(self, name: str, parent: Project) -> None:
         git.switch_reset(rb.CRAWL, parent.hash)
@@ -389,11 +456,23 @@ class DB:
         parent.hash = upd_project
         parent.mtime = datetime.datetime.now().isoformat()
 
-        upd_projects = git.merge_pick(*Project.get_list_merge(rb.PROJECTS, self.narch_projects))
+        upd_projects = git.merge_pick(*Project.get_list_merge())
         git.switch_reset(rb.PROJECTS, upd_projects)
-        self.sort()
         
+    def remove_step(self, step: Step, parent: Project) -> None:
+        print("Removing step " + paint(step.name, Step.COLOR) )
+        self._unstore_step(step, parent)
+
+        upd_project = git.merge_pick(*parent.get_merge(), False)
+        parent.hash = upd_project
+        parent.mtime = datetime.datetime.now().isoformat()
+
+        upd_projects = git.merge_pick(*Project.get_list_merge(), False)
+        git.switch_reset(rb.PROJECTS, upd_projects)
+
     def create_day(self, date: str) -> Day:
+        day = self.days.get(date)
+        if day is not None: return day
         git.switch_reset(rb.CRAWL, rb.DAYS_STORAGE)
         root = git.commit_hash(f"[i] {date}")
         hash = git.commit_hash(f"[m] {date}")
@@ -404,26 +483,44 @@ class DB:
         return day
 
     def create_today(self, date: str) -> Day | None:
-        day = self.create_day(date)
+        if self.today.date == date: return self.today
+        day = self.days.get(date)
+        if day is None:
+            day = self.create_day(date)
         git.switch_reset(rb.TODAY, day.root)
         self.today = day
 
-    def remove_step(self, project: Project, step: Step) -> None:
-        pass
-        # old_projects = [project.hash for project in self.narch_projects]
-        # project.steps.remove(step)
-        # new_project = git.merge_pick(*project.get_merge())
+    def assign_task(self, day: Day, project: Project) -> None:
+        git.switch_reset(rb.CRAWL, day.root)
+        task_hash = git.merge_pick(project.root, [day.root, project.root], f"@ {day.date} {project.name}")
+        task = Task(task_hash, project)
+        task.sync()
+        self._store_task(task, day)
+        upd_day = git.merge_pick(*day.get_merge())
+        day.hash = upd_day
+        upd_days = git.merge_pick(*Day.get_list_merge(), False)
+        git.switch_reset(rb.DAYS, upd_days)
+
+    def unassign_task(self, day: Day, task: Task) -> None:
+        self._unstore_task(task, day)
+        upd_day = git.merge_pick(*day.get_merge(), False)
+        day.hash = upd_day
+        upd_days = git.merge_pick(*Day.get_list_merge(), False)
+        git.switch_reset(rb.DAYS, upd_days)
+        
+        
+        
 
 
-    def pick[T: Project | Cat](self, t_list: list[T], name: str | None, fuzzy: str | None, force_menu: bool = False) -> T | None:
-        if name is None and fuzzy is None: return None
+    def pick[T: Project | Cat](self, t_list: list[T], name: str | None, fuzzy: str | None, force_menu: bool = False) -> tuple[T | None, bool]:
+        if name is None and fuzzy is None: return None, False
         if fuzzy:
             t_list = [t for t in t_list if fuzzy in t.name]
         else:
             t_list = [t for t in t_list if name == t.name]
 
-        if len(t_list) == 0: return None
-        if len(t_list) == 1 and not force_menu: return t_list[0]
+        if len(t_list) == 0: return None, False
+        if len(t_list) == 1 and not force_menu: return t_list[0], True
 
         print("Please choose from this list:")
         for i, t in enumerate(t_list):
@@ -433,7 +530,7 @@ class DB:
             inp = input(f"Enter number in [0, {len(t_list)-1}] or q(uit): ")
             if inp == 'q' or inp == 'quit':
                 print("Exiting")
-                return None
+                return None, True
             if not inp.isdecimal():
                 print("Not a number")
                 continue
@@ -443,27 +540,23 @@ class DB:
                 continue
             break
         print()
-        return t_list[index]
+        return t_list[index], True
         
         
 
     def precompute(self):
         branch_names = [
             'categories',
-            'archived-categories',
             'projects',
-            'archived-projects',
             'days',
             'today']
         hashes = git.show(branch_names, pretty="%H %P").split('\n\n')
         
-        cat_hashes, archcat_hashes, project_hashes, archproject_hashes, day_hashes, today = [x.split(' ') for x in hashes]
+        cat_hashes, project_hashes, day_hashes, today = [x.split(' ') for x in hashes]
 
         self.task_storage = cat_hashes[1]
         cat_hashes = cat_hashes[2:]
-        archcat_hashes = archcat_hashes[2:]
         project_hashes = project_hashes[2:]
-        archproject_hashes = archproject_hashes[2:]
         day_hashes = day_hashes[2:]
         today = today[0]
 
@@ -473,15 +566,15 @@ class DB:
         # :Categories:
         
 
-        parent_names = [x.split(' ', 1) for x in git.show(cat_hashes + archcat_hashes, pretty="%P %N").split('\n\n')]
+        parent_names = [x.split(' ', 1) for x in git.show(cat_hashes, pretty="%P %N").split('\n\n')]
         
         offset = len(cat_hashes)
-        cats = zip(cat_hashes, parent_names, cycle([False]))
-        archcats = zip(archcat_hashes, parent_names[offset:], cycle([True]))
+        cats = zip(cat_hashes, parent_names)
         
-        for hash, parent_name, archived in chain(cats, archcats):
+        for hash, parent_name in cats:
             parent, name_json = parent_name
             info = json.loads(name_json)
+            archived = info.get('archived', False)
             name = info.get('path') or info.get('name') or Error
             cat = Cat(hash, name, parent, archived)
             self.cats_name[name] = cat
@@ -495,9 +588,10 @@ class DB:
         
         # :Projects:
         
-        root_step = [x.split(' ') for x in git.show(project_hashes + archproject_hashes, pretty="%aI %P").split('\n') if x != '']
+        root_step = [x.split(' ') for x in git.show(project_hashes, pretty="%aI %P").split('\n') if x != '']
         mtimes = [x[0] for x in root_step]
         steps_list = [x[2:] for x in root_step]
+        
         # :Steps:
 
         steps = list(flatten(steps_list))
@@ -515,15 +609,12 @@ class DB:
         notes = git.notes_show_list(list(roots))
 
         offset: int = len(project_hashes)
-        # print(f"{project_hashes = }")
-        # print(f"{roots = }")
-        # print(f"{list(steps_list) = }")
-        projects = zip(project_hashes, roots, notes, steps_list, mtimes,  cycle([False]))
-        archprojects = zip(archproject_hashes, roots[offset:], notes[offset:], list(steps_list)[offset:], mtimes[offset:], cycle([True]))
-        for hash, root, note, steps, mtime, archived in chain(projects, archprojects):
+        projects = zip(project_hashes, roots, notes, steps_list, mtimes)
+        for hash, root, note, steps, mtime in projects:
             info = json.loads(note)
             name = info.get('name') or Error
             cat_name = info.get('category')
+            archived = info.get('archived', False)
             cat = self.cats[cat_name]
             steps = [self.steps[hash] for hash in steps]
             project = Project(hash, root, name, cat, mtime, archived, steps)
@@ -537,7 +628,7 @@ class DB:
             
 
         # :Days:
-        day_tasks = [x.split(":") for x in git.show(day_hashes, pretty="%H:%s:%P").split('\n\n')]
+        day_tasks = [x.split(":") for x in git.show(day_hashes, pretty="%H:%s:%P").split('\n') if x != '']
 
         # :Tasks:
         task_hashes = list(flatten([x[2].split(' ')[1:] for x in day_tasks]))
@@ -548,8 +639,8 @@ class DB:
             step_marks_str: dict[str, str] = info.get('step_marks') or dict()
             step_marks = {k: Mark[v] for k, v in step_marks_str.items()}
             project_hash = parents.split(' ')[1]
-            project = self.projects_root[project_hash]
-            task = Task(hash, mark, project, step_marks)
+            project = self.projects_root.get(project_hash)
+            task = Task(hash, project, mark, step_marks)
             self.tasks[hash] = task
 
         # :Days: again
@@ -567,6 +658,10 @@ class DB:
         
 
 db = DB()
+# print(f"{[p.hash for p in db.arch_cats] = }")
+# print(f"{[p.hash for p in db.all_cats] = }")
+# upd_cats = git.merge_pick(*Cat.get_list_merge(rb.CATEGORIES, db.all_cats), False)
+# git.switch_reset(rb.CATEGORIES, upd_cats)
 # pprint(db.days)
 
 # print(f"[DB] Number of calls: {f.LIGHTRED_EX}{run.number_of_calls}{s.RESET_ALL}")

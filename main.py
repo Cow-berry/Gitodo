@@ -37,7 +37,7 @@ def main() -> None:
         exit(1)
     
     cmd_cls.run(args)
-    print(f'\nTOTAL NUMBER OF CALLS: {colorama.Fore.LIGHTRED_EX}{run.number_of_calls}{colorama.Style.RESET_ALL}')
+    # print(f'\nTOTAL NUMBER OF CALLS: {colorama.Fore.LIGHTRED_EX}{run.number_of_calls}{colorama.Style.RESET_ALL}')
     
 if __name__ == "__main__":
     main()

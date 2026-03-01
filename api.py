@@ -1,5 +1,6 @@
 from enum import StrEnum
 from typing import Callable, ClassVar, LiteralString, override
+from pretty import rainbow
 from run import get_date
 from commit import rb, rbl, ListCommit
 import commit
@@ -103,9 +104,9 @@ class CreateCommand(Command):
             [success(f"Created category {paint(cat.detailed_name(), Cat.COLOR)}") for cat in db.narch_cats[-cats_created:]]
         elif task_type.startswith('p'):
             name, fuzzy = process_fuzzy_option(args, 'parent')
-            cat = db.pick(db.narch_cats, name, fuzzy)
+            cat, found = db.pick(db.narch_cats, name, fuzzy)
             if cat is None:
-                report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
+                if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
                 return
             existing_project = db.create_project(args.name, cat)
             if existing_project is not None:
@@ -114,9 +115,9 @@ class CreateCommand(Command):
                 ShowCommand.show_project(existing_project)
         else:
             name, fuzzy = process_fuzzy_option(args, 'parent')
-            project = db.pick(db.narch_projects, name, fuzzy)
+            project, found = db.pick(db.narch_projects, name, fuzzy)
             if project is None:
-                report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
+                if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
                 return
             db.create_step(args.name, project)
 
@@ -131,30 +132,106 @@ class RemoveCommand(Command):
 
         category = subcmds.add_parser('category', aliases=['cat', 'c'])
         add_fuzzy_option(category, 'name')
+        category.add_argument('--purge', required=False, action='store_true')
         # category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
         add_fuzzy_option(project, 'name')
-
+        project.add_argument('--purge', required=False, action='store_true')
+        
         step = subcmds.add_parser('step', aliases=['s'])
         step.add_argument('step_id', type=int)
         add_fuzzy_option(step, 'parent')
 
+
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        if args.task_type.startswith('s'):
+        task_type: str = args.task_type
+        if task_type.startswith('s'):
             name, fuzzy = process_fuzzy_option(args, 'parent')
-            project = db.pick(db.narch_projects, name, fuzzy)
+            project, found = db.pick(db.narch_projects, name, fuzzy)
             if project is None:
-                report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
+                if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
                 return
             steps_count = len(project.steps)
-            if args.step_id < 0 or args.step_id >= steps_count:
-                error(f"{args.step_id} is out of bounds. Project {paint(project.name, Project.COLOR)} has {steps_count} steps. step_id should be in [0, {steps_count-1}]")
+            step_id: int = args.step_id
+            if step_id < 0 or step_id >= steps_count:
+                error(f"{step_id} is out of bounds. Project {paint(project.name, Project.COLOR)} has {steps_count} steps. step_id should be in [0, {steps_count-1}]")
                 return
-            db.remove_step(project, project.steps[args.steps_id])
+            db.remove_step(project.steps[step_id], project)
+        elif task_type.startswith('p'):
+            purge: bool = args.purge
+            name, fuzzy = process_fuzzy_option(args, 'name')
+            projects = db.all_projects if purge else db.narch_projects
+            project, found = db.pick(projects, name, fuzzy)
+            if project is None:
+                if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
+                return
+            if not purge:
+                db.archive_project(project)
+                return
+            print(f"The following project will be {paint("PERMANENTLY deleted", f.LIGHTRED_EX)}:")
+            ShowCommand.show_project(project)
+            print("Do you want to continue? [y/N] ", end = '')
+            yes = input()
+            if yes.lower() != 'y':
+                print("Abort.")
+            db.remove_project(project)
+        elif task_type.startswith('c'):
+            purge: bool = args.purge
+            name, fuzzy = process_fuzzy_option(args, 'name')
+            cats = db.all_cats if purge else db.narch_cats
+            cat, found = db.pick(cats, name, fuzzy)
+            if cat is None:
+                if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
+                return
+            if not purge:
+                db.archive_cat(cat)
+                return
+            print(f"The following projects and categories will be {paint("PERMANENTLY deleted", f.LIGHTRED_EX)}:")
+            ShowCommand.show_category(cat)
+            print("Do you want to continue? [y/N] ", end = '')
+            yes = input()
+            if yes.lower() != 'y':
+                print("Abort.")
+                return
+            db.remove_category(cat)
             
+                
+class RestoreCommand(Command):
+    command: list[str] = ['restore']
+    help: str = "Remove a task"
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
+
+        category = subcmds.add_parser('category', aliases=['cat', 'c'])
+        add_fuzzy_option(category, 'name')
+
+        project = subcmds.add_parser('project', aliases=['p'])
+        add_fuzzy_option(project, 'name')
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        task_type: str = args.task_type
+        if task_type.startswith('p'):
+            name, fuzzy = process_fuzzy_option(args, 'name')
+            project, found = db.pick(db.arch_projects, name, fuzzy)
+            if project is None:
+                if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
+                return
+            db.restore_project(project)
+        elif task_type.startswith('c'):
+            name, fuzzy = process_fuzzy_option(args, 'name')
+            cat, found = db.pick(db.arch_cats, name, fuzzy)
+            if cat is None:
+                if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
+                return
+            db.restore_cat(cat)
         
 class WakeUpCommand(Command):
     command: list[str] = ["wakeup"]
@@ -163,12 +240,80 @@ class WakeUpCommand(Command):
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        existing_day = db.create_day(db.call_date('today'))
-        if existing_day is not None:
-            # report_already_exists
+        today_date = db.call_date('today')
+        if today_date in db.days:
+            report(warning, Day, rd.AlreadyExists, rainbow(today_date))
+        
+        db.create_today(today_date)
+
+        print(db.today.agenda())
+
+
+class AssignCommand(Command):
+    command: list[str] = ["assign", 'a']
+    help: str = "Assign a task to today's agenda"
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        add_fuzzy_option(parser, 'name')
+        parser.add_argument('--silent', action='store_true')
+        parser.add_argument('--schedule', '-d', type=str)
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        name, fuzzy = process_fuzzy_option(args, 'name')
+        project, found = db.pick(db.narch_projects, name, fuzzy)
+        if project is None:
+            if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
             return
+            
+        day = db.today
+        if args.schedule:
+            date, error_ = db.call_date_maybe(args.schedule)
+            if date is None:
+                error(error_)
+                return
+            day = db.create_day(date)
 
+        db.assign_task(day, project)
 
+        if not args.silent:
+            print(day.agenda())
+
+class UnassignCommand(Command):
+    command: list[str] = ["unassign", 'una']
+    help: str = "Unassign a task from today's agenda"
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('task_id', type=int)
+        parser.add_argument('--silent', action='store_true')
+        parser.add_argument('--schedule', '-d', type=str)
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        day = db.today
+        if args.schedule:
+            date, error_ = db.call_date_maybe(args.schedule)
+            if date is None:
+                error(error_)
+                return
+            day = db.create_day(date)
+
+        task_id: int = args.task_id
+        task_count = len(day.tasks)
+        if task_id < 0 or task_id >= task_count:
+            error(f"{task_id} is out of bounds. Day {rainbow(day.date)} has {task_count} steps. step_id should be in [0, {task_count-1}]")
+            return
+        task = day.tasks[task_id]
+        db.unassign_task(day, task)
+
+        if not args.silent:
+            print(day.agenda())
     
 
 class BrowseCommand(Command):
@@ -183,15 +328,6 @@ class BrowseCommand(Command):
         parser.add_argument('--archived', '-a', dest='all', action='store_true')
         parser.add_argument('--cat-name', '-c', dest='cat_name', type=str, required=False)
         parser.add_argument('--project-name', '-p', dest='project_name', type=str, required=False)
-
-    @staticmethod
-    def get_projects(name: str | None, fuzzy: str | None, archived: bool) -> list[Project] | None:
-        projects = db.all_projects if archived else db.narch_projects
-        if name is None and fuzzy is None: return projects
-        cats = db.all_cats if archived else db.narch_cats
-        cat = db.pick(cats, name, fuzzy)
-        if cat is None: return None
-        return [project for project in projects if project.cat.is_subcat(cat)]
 
     @classmethod
     def show_multiple_projects(cls, projects: list[Project], reasons: str = "") -> None:
@@ -278,13 +414,16 @@ class ShowCommand(Command):
             print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
 
     @classmethod
-    def show_category(cls, cat: Cat) -> None:
-        print("Showing category", end = ' ')
+    def show_category(cls, cat: Cat, silent: bool=False) -> None:
+        if not silent: print(f"Showing category {paint(cat.name, Cat.COLOR)}:")
         print(f"{paint(cat.name, Cat.COLOR)}:")
         for project in cat.projects:
             print(f"- {paint(project.name, project.COLOR)}")
             for i, step in enumerate(project.steps):
                 print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
+
+        for subcat in cat.subcats:
+            cls.show_category(subcat, True)
             
     @override
     @classmethod
@@ -292,10 +431,9 @@ class ShowCommand(Command):
         if args.kind.startswith('p'):
             name, fuzzy = process_fuzzy_option(args, 'name')
             proj_list = db.all_projects if args.all else db.narch_projects
-            project = db.pick(proj_list, name, fuzzy)
+            project, found = db.pick(proj_list, name, fuzzy)
             if project is None:
-                search_spec = "contaning" if fuzzy else "exactly"
-                print(f"Project with name {search_spec} {fuzzy or name} was not found")
+                if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
                 return
             cls.show_project(project)
         elif args.kind.startswith('d'):
@@ -308,9 +446,9 @@ class ShowCommand(Command):
         elif args.kind.startswith('c'):
             name, fuzzy = process_fuzzy_option(args, 'name')
             cat_list = db.all_cats if args.all else db.narch_cats
-            cat = db.pick(cat_list, name, fuzzy)
+            cat, found = db.pick(cat_list, name, fuzzy)
             if cat is None:
-                report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
+                if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
                 return
             cls.show_category(cat)
                 
