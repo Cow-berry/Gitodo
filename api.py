@@ -1,13 +1,10 @@
+from db import Cat, Project, Step, Day, Mark, TaskType, TaskTypeList, paint, red, yellow, green
+from db import db, install
 from pretty import rainbow
-from run import get_date
-from commit import rb, rbl, ListCommit
-import commit
-
-from db import Cat, Project, Day, Mark, TaskType, TaskTypeList, paint, red, yellow, green
-from db import db
 
 
 import argparse
+from datetime import datetime
 from colorama import Fore as f
 from colorama import Back as b
 from colorama import Style as s
@@ -15,18 +12,19 @@ from typing import Callable, ClassVar, LiteralString, override
 from enum import StrEnum
 from collections.abc import Sequence
 
-def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: bool=True): # type: ignore
+def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: bool=True, dash_n: bool=False): # type: ignore
     group = parser.add_mutually_exclusive_group(required=required)
     # default behaviour is fuzzy unless a flag is provided
     group.add_argument(f'fuzzy', type=str, default=None, nargs="?", metavar='fuzzy')
     group.add_argument('--fuzzy', '-r', type=str, dest='fuzzy_flag')
-    group.add_argument(f'--{option}', f'-{option[0]}', type=str)
+    group.add_argument(f'--{option}', f'-{option[0]}', *(['-n'] if dash_n else []), type=str)
     return group
 
 def process_fuzzy_option(args: argparse.Namespace,  option: str) -> tuple[str | None, str | None]:
     fuzzy = args.fuzzy_flag or args.fuzzy
     option_arg = args.__getattribute__(option)
     return option_arg, fuzzy 
+    
 
 
 def error(text: str) -> None:
@@ -54,8 +52,10 @@ def report_fuzzy[T: Cat | Project](func: Callable[[str], None], cls: type[T], de
     text = f"with name {search_spec} {paint(fuzzy or name, cls.COLOR)}"
     report(func, cls, detail, text)
 
-def report_out_of_bounds(id: int, count: int, var_name: str, text: str) -> None:
-    error(f"{id} is out of bounds. {text} has {count} {var_name}s. {var_name}_id should be in [0, {count-1}]")
+def report_out_of_bounds(id: int, count: int, var_name: str, text: str, id_name: str | None = None) -> None:
+    if id_name is None:
+        id_name = f"{var_name}_id"
+    error(f"{id} is out of bounds. {text} has {count} {var_name}s. {id_name} should be in [0, {count-1}]")
     
     
 class Command:
@@ -88,12 +88,17 @@ class CreateCommand(Command):
         category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
+        group = project.add_argument_group('assign group')
+        group.add_argument('-a', '--assign', action='store_true')
+        group.add_argument('-d', '--schedule', type=str)
         add_fuzzy_option(project, 'parent')
         project.add_argument('name', type=str)
 
+        
         step = subcmds.add_parser('step', aliases=['s'])
-        add_fuzzy_option(step, 'parent')
-        step.add_argument('name', type=str)
+        add_fuzzy_option(step, 'name')
+        step.add_argument('step_name', type=str)
+        step.add_argument('--insert', '-i', type=int)
         
     @classmethod
     @override
@@ -110,21 +115,38 @@ class CreateCommand(Command):
             if cat is None:
                 if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
                 return
-            existing_project = db.create_project(args.name, cat)
-            if existing_project is not None:
+            project, created = db.create_project(args.name, cat)
+            if not created:
                 report(error, Project, rd.AlreadyExists, f"{paint(args.name, Project.COLOR)} under category {cat.detailed_name()}")
                 print()
-                ShowCommand.show_project(existing_project)
+                ShowCommand.show_project(project)
+                return
+            if args.assign:
+                day = db.today
+                if args.schedule:
+                    date, error_ = db.call_date_maybe(args.schedule)
+                    if date is None:
+                        error(error_)
+                        return
+                    day = db.create_day(date)
+                db.assign_task(day, project)
         else:
-            name, fuzzy = process_fuzzy_option(args, 'parent')
-            project, found = db.pick(db.narch_projects, name, fuzzy)
-            if project is None:
+            name, fuzzy = process_fuzzy_option(args, 'name')
+            parent, found = db.pick(db.narch_projects, name, fuzzy)
+            if parent is None:
                 if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
                 return
-            db.create_step(args.name, project)
+            insert: int | None = args.insert
+            if insert is not None and (insert < 0 or insert > len(parent.steps)):
+                report_out_of_bounds(insert, len(parent.steps), 'steps', parent.detailed_name(), 'insert')
+                return
+            db.create_step(args.step_name, parent)
+            if insert is not None:
+                db.reorder_steps(parent, list(range(insert)) + [len(parent.steps)-1] + list(range(insert, len(parent.steps)-1)))
+            ShowCommand.show_project(parent)
 
 class RemoveCommand(Command):
-    command: list[str] = ['remove', 'r']
+    command: list[str] = ['remove', 'r', 'arch']
     help: str = "Remove a task"
 
     @override
@@ -135,15 +157,18 @@ class RemoveCommand(Command):
         category = subcmds.add_parser('category', aliases=['cat', 'c'])
         add_fuzzy_option(category, 'name')
         category.add_argument('--purge', required=False, action='store_true')
+        category.add_argument('--silent', '-s', action='store_true')
         # category.add_argument('name', type=str)
 
         project = subcmds.add_parser('project', aliases=['p'])
         add_fuzzy_option(project, 'name')
         project.add_argument('--purge', required=False, action='store_true')
+        project.add_argument('--silent', '-s', action='store_true')
         
         step = subcmds.add_parser('step', aliases=['s'])
+        add_fuzzy_option(step, 'parent', dash_n=True)
         step.add_argument('step_id', type=int)
-        add_fuzzy_option(step, 'parent')
+        step.add_argument('--silent', '-s', action='store_true')
 
 
     @override
@@ -162,6 +187,7 @@ class RemoveCommand(Command):
                 error(f"{step_id} is out of bounds. Project {paint(project.name, Project.COLOR)} has {steps_count} steps. step_id should be in [0, {steps_count-1}]")
                 return
             db.remove_step(project.steps[step_id], project)
+            if not args.silent: ShowCommand.show_project(project)
         elif task_type.startswith('p'):
             purge: bool = args.purge
             name, fuzzy = process_fuzzy_option(args, 'name')
@@ -172,6 +198,7 @@ class RemoveCommand(Command):
                 return
             if not purge:
                 db.archive_project(project)
+                if not args.silent: ShowCommand.show_project(project)
                 return
             print(f"The following project will be {paint("PERMANENTLY deleted", f.LIGHTRED_EX)}:")
             ShowCommand.show_project(project)
@@ -182,7 +209,7 @@ class RemoveCommand(Command):
                 return
             db.remove_project(project)
         elif task_type.startswith('c'):
-            purge: bool = args.purge
+            purge = args.purge
             name, fuzzy = process_fuzzy_option(args, 'name')
             cats = db.all_cats if purge else db.narch_cats
             cat, found = db.pick(cats, name, fuzzy)
@@ -191,6 +218,7 @@ class RemoveCommand(Command):
                 return
             if not purge:
                 db.archive_cat(cat)
+                if not args.silent: ShowCommand.show_category(cat)
                 return
             print(f"The following projects and categories will be {paint("PERMANENTLY deleted", f.LIGHTRED_EX)}:")
             ShowCommand.show_category(cat)
@@ -203,7 +231,7 @@ class RemoveCommand(Command):
             
                 
 class RestoreCommand(Command):
-    command: list[str] = ['restore']
+    command: list[str] = ['restore', 'unarch']
     help: str = "Remove a task"
 
     @override
@@ -212,9 +240,11 @@ class RestoreCommand(Command):
         subcmds = parser.add_subparsers(dest='task_type', required=True)
 
         category = subcmds.add_parser('category', aliases=['cat', 'c'])
+        category.add_argument('--silent', '-s', action='store_true')
         add_fuzzy_option(category, 'name')
 
         project = subcmds.add_parser('project', aliases=['p'])
+        project.add_argument('--silent', '-s', action='store_true')
         add_fuzzy_option(project, 'name')
 
     @override
@@ -228,6 +258,7 @@ class RestoreCommand(Command):
                 if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
                 return
             db.restore_project(project)
+            if not args.silent: ShowCommand.show_project(project)
         elif task_type.startswith('c'):
             name, fuzzy = process_fuzzy_option(args, 'name')
             cat, found = db.pick(db.arch_cats, name, fuzzy)
@@ -235,6 +266,7 @@ class RestoreCommand(Command):
                 if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
                 return
             db.restore_cat(cat)
+            if not args.silent: ShowCommand.show_category(cat)
         
 class WakeUpCommand(Command):
     command: list[str] = ["wakeup"]
@@ -330,7 +362,7 @@ class MarkCommand(Command):
         parser.add_argument('task_id', type=int)
         parser.add_argument('step_id', type=int, default=None, nargs='?')
         parser.add_argument('--silent', '-s', action='store_true')
-        parser.add_argument('--archive', action='store_true')
+        parser.add_argument('--archive', '-a',  action='store_true')
         parser.add_argument('--schedule', '-d', type=str)
 
     @override
@@ -370,14 +402,14 @@ class MarkCommand(Command):
                 return
             step = project.steps[step_id]
             if mark == Mark.InProgress: UnfocusCommand.unfocus()
-            db.mark_task_step(task, step, mark)
+            db.mark_task_step(day, task, step, mark)
             if mark == Mark.InProgress and task.mark != Mark.Done:
-                db.mark_task(task, mark)
+                db.mark_task(day, task, mark)
             if not silent: print(day.agenda())
             return
 
         if mark != Mark.NotDone: UnfocusCommand.unfocus()
-        db.mark_task(task, mark)
+        db.mark_task(day, task, mark)
         if archive:
             if project is None: warning("This project is already permanently deleted")
             else: db.archive_project(project)
@@ -392,12 +424,13 @@ class UnfocusCommand(Command):
     @staticmethod
     def unfocus() -> None:
         tasks = db.today.tasks
+        day = db.today
         for task in tasks:
             for step in task.get_steps():
                 if task.step_marks.get(step.hash) == Mark.InProgress:
-                    db.mark_task_step(task, step, Mark.NotDone)
+                    db.mark_task_step(day, task, step, Mark.NotDone)
             if task.mark == Mark.InProgress:
-                db.mark_task(task, Mark.NotDone)
+                db.mark_task(day, task, Mark.NotDone)
     @override
     @classmethod
     def run_(cls) -> None:
@@ -405,7 +438,7 @@ class UnfocusCommand(Command):
         print(db.today.agenda())
     
 class RenameCommand(Command):
-    command: list[str] = ["mv"]
+    command: list[str] = ["rename", "reword", "mv"]
     help: str = "rename anything inside task"
 
     
@@ -436,16 +469,19 @@ class RenameCommand(Command):
         task_type: str = args.task_type
         name, fuzzy = process_fuzzy_option(args, 'name' if task_type[0] != 's' else 'parent')
         all: bool = args.all
+        tasks: list[Project] | list[Cat]
+        task_cls: type[Cat] | type[Project]
         match task_type[0]:
             case 'c':
                 tasks = db.all_cats if all else db.narch_cats
-                cls = Cat
+                task_cls = Cat
             case _:
                 tasks = db.all_projects if all else db.narch_projects
-                cls = Project
+                task_cls = Project
+        task: Cat | Project | None | Step
         task, found = db.pick(tasks, name, fuzzy)
         if task is None:
-            if not found: report_fuzzy(error, cls, rd.NotFound, name, fuzzy)
+            if not found: report_fuzzy(error, task_cls, rd.NotFound, name, fuzzy)
             return
 
         parent: Project | None = None
@@ -494,28 +530,74 @@ class ReorderCommand(Command):
         ShowCommand.show_project(project)
         steps = project.steps
         step_count = len(steps)
-        print(f"Enter numbers 0 through {step_count-1} or q(uit)")
+        if step_count == 0:
+            warning("No steps. Nothing to reorder.")
+            return
+            
+        
+        print(f"Enter numbers 0 through {step_count-1} or q(uit):")
+        
         while True:
             inp = input().lower()
             if inp == 'q' or inp == 'quit':
                 print('Exiting.')
                 return
             nums_str = inp.split()
-            if not all(x.isdecimal() for x in nums_str):
-                print("Not numbers: ", ' '.join([x for x in nums_str if not x.isdecimal()]))
-                continue
-            nums = [int(x) for x in nums_str]
-            if min(nums) < 0 or max(nums) >= step_count:
-                print('\x1b[1A', end='')
-                print("Out of range: " + ' '.join([str(x) for x in nums if x < 0 or x >= step_count]))
-                continue
-            if len(nums) != len(set(nums)):
-                print("Numbers reapeated: " + ' '.join([str(x) for x in nums if nums.count(x) > 1]))
-                continue
-            if len(nums) < step_count:
-                print("Number not mentioned: " + ' '.join([str(i) for i in range(step_count) if i not in nums]))
-                continue
-            break
+            print('\x1b[1A\r', end='')
+            nums: list[int] = []
+            not_mentioned = list(range(step_count))
+            out_of_bounds: list[int] = []
+            repeated: list[int] = []
+            not_numbers: list[str] = []
+            for x in inp.split(' '):
+                if len(x.strip()) == 0:
+                    print(x, end=' ')
+                    continue
+                if not x.isdecimal() and not (x[0] == '-' and x[1:].isdecimal()):
+                    not_numbers.append(x.strip())
+                    print(red(x), end=' ')
+                    continue
+                n = int(x)
+                if n < 0 or n >= step_count:
+                    out_of_bounds.append(n)
+                    print(red(x), end =' ')
+                    continue
+                if n not in not_mentioned:
+                    repeated.append(n)
+                    print(red(x), end=' ')
+                    continue
+                not_mentioned.remove(n)
+                nums.append(n)
+                print(green(x), end=' ')
+            print()
+
+            if not_numbers: print(f"Not numbers: {red(' '.join(not_numbers))}")
+            if not_mentioned: print(f"Not mentioned: {green(' '.join(map(str, not_mentioned)))}")
+            if out_of_bounds: print(f"Out of bounds: {red(' '.join(map(str, out_of_bounds)))}")
+            if repeated: print(f"Repeated: {red(' '.join(map(str, repeated)))}")
+
+            if len(not_numbers + not_mentioned + out_of_bounds + repeated) == 0:
+                break
+            nums = []
+                
+                    
+            
+            # if not all(x.isdecimal() for x in nums_str):
+            #     print("Not numbers: ", ' '.join([x for x in nums_str if not x.isdecimal()]))
+            #     continue
+            # nums = [int(x) for x in nums_str]
+            
+            
+            # if min(nums) < 0 or max(nums) >= step_count:
+            #     print("Out of range: " + ' '.join([str(x) for x in nums if x < 0 or x >= step_count]))
+            #     continue
+            # if len(nums) != len(set(nums)):
+            #     print("Numbers reapeated: " + ' '.join([str(x) for x in nums if nums.count(x) > 1]))
+            #     continue
+            # if len(nums) < step_count:
+            #     print("Number not mentioned: " + ' '.join([str(i) for i in range(step_count) if i not in nums]))
+            #     continue
+            # break
         db.reorder_steps(project, nums)
         ShowCommand.show_project(project)
             
@@ -615,9 +697,9 @@ class ShowCommand(Command):
         day.add_argument('date', type=str)
 
     @classmethod
-    def show_project(cls, project: Project):
+    def show_project(cls, project: Project) -> None:
         print("Showing project", end = ' ')
-        print(f"{paint(project.name, project.COLOR)}")
+        print(f"{paint(project.detailed_name(), project.COLOR)}")
         for i, step in enumerate(project.steps):
             print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
 
@@ -671,7 +753,7 @@ class InstallCommand(Command):
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
-        commit.install()
+        install()
  
         
                 

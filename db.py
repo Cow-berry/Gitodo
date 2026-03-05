@@ -22,6 +22,43 @@ from colorama import Style as s
 # all categories (+archived)
 # ~
 
+def install() -> None:
+    run.run_cmd(['rm', '-rf', '.git/'])
+    run.run_cmd(["git",  "init"])
+    git.commit("Initial commit")
+    git.branch(rb.CRAWL, rb.MAIN)
+    for name in [rb.TASK_STORAGE, rb.DAYS_STORAGE]:
+        print(f"{name = }")
+        git.branch_switch(name, 'main')
+        git.commit(f"{name.capitalize()} start")
+
+    git.switch(rb.DAYS_STORAGE)
+    git.branch_switch(rb.TODAY, rb.DAYS_STORAGE)
+    git.commit(f"[i] {run.get_date()}")
+    git.commit(f"[m] {run.get_date()}")
+    git.branch_switch(rb.DAYS, rb.TODAY)
+    git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, rb.TODAY], "All days")
+
+    git.switch(rb.TASK_STORAGE)
+    for name in [rb.CATEGORIES, rb.PROJECTS, rb.ARCHIVED_CATEGORIES, rb.ARCHIVED_PROJECTS]:
+        print(f"{name = }")
+        git.branch_switch(name, rb.TASK_STORAGE)
+        git.commit(f"All {name}")
+
+def date_to_datetime(date: str) -> datetime.datetime:
+    components: list[str] = []
+    component: str = ""
+    for c in date:
+        if c.isdecimal():
+            component += c
+        else:
+            if len(component) == 0: continue
+            components.append(component)
+            component = ""
+    year, month, day = [int(x) for x in components]
+    return datetime.datetime(year, month, day)
+            
+
 Error = "Error"
 
 def generate_note(**kwargs: Any) -> str:
@@ -42,6 +79,12 @@ def green(text: str) -> str:
 def rgb(r: int, g: int, b: int) -> str:
     return f"\x1b[38;2;{r};{g};{b}m"
 
+CREATING: str = green("Creating")
+REMOVING: str = red("Removing")
+ARCHIVING: str = yellow("Archiving")
+RESTORING: str = paint("Restoring", '\x1b[103m' + rgb(0,0,0))
+MARKING: str = "Marking"
+
 
 @dataclass
 class Step:
@@ -56,7 +99,7 @@ class Step:
         git.notes_add(self.hash, note)
 
     def detailed_name(self) -> str:
-        return self.name
+        return paint(self.name, self.COLOR)
 
 @dataclass
 class Project:
@@ -67,8 +110,21 @@ class Project:
     mtime: str
     archived: bool = field(default=False)
     steps: list[Step] = field(default_factory=lambda: [])
+    last_done: str | None = field(default=None)
 
     COLOR: ClassVar[str] = rgb(90, 205, 250)
+
+    def update_last_done(self, date: str) -> None:
+        if self.last_done is None: self.last_done = date
+        self.last_done = max(self.last_done, date)
+
+    def fetch_last_done(self) -> None:
+        self.last_done = None
+        for day in db.days.values():
+            for task in day.tasks:
+                if task.project != self: continue
+                if task.mark != Mark.Done: continue
+                self.update_last_done(day.date)
 
     def sync(self) -> None:
         note = generate_note(hash=self.hash, name=self.name, archived=self.archived, category=self.cat.hash)
@@ -157,7 +213,7 @@ class Mark(StrEnum):
     @property
     def colour(self) -> str:
         match self:
-            case Mark.NotDone:    return rgb(200, 50, 50)
+            case Mark.NotDone:    return rgb(255, 50, 50)
             case Mark.InProgress: return rgb(0, 255, 255)
             case Mark.Done:       return rgb(50, 255, 50)        
 
@@ -168,6 +224,10 @@ class Task:
     project: Project | None
     mark: Mark = field(default=Mark.NotDone)
     step_marks: dict[str, Mark] = field(default_factory=lambda: dict())
+
+    def detailed_name(self) -> str:
+        if self.project is None: return paint("Deleted Project", f.LIGHTRED_EX, s.BRIGHT)
+        return self.project.detailed_name()
 
     def sync(self) -> None:
         note = generate_note(mark=self.mark, step_marks=self.step_marks)
@@ -201,6 +261,13 @@ class Day:
         message = 'All days'
         return hash, parents, message
 
+    @property
+    def active_task(self) -> Task | None:
+        for task in self.tasks:
+            if task.mark == Mark.InProgress:
+                return task
+        return None
+
     def agenda(self) -> str:
         result: list[str] = []
         dots = ''.join([paint('●', task.mark.colour) for task in self.tasks])
@@ -212,17 +279,19 @@ class Day:
             r = int(255*min(1, (1-t)*2))
             g = int(255*min(1, t*2))
             done_colour = rgb(r, g, 0)
-        result.append(rainbow(f'Agenda @ {self.date}') + dots + paint(f"[{done_count}/{len(self.tasks)}]", done_colour) + ":")
+        plus_one = paint("+1", f.LIGHTCYAN_EX) if self.active_task is not None else ""
+        result.append(rainbow(f'Agenda @ {self.date}') + dots + paint(f"[{done_count}{plus_one}{done_colour}/{len(self.tasks)}]", done_colour) + ":")
         if len(self.tasks) == 0:
             result.append(f'--- No tasks are added yet --- ')
             return '\n'.join(result)
         
+        
         ln = len(str(len(self.tasks)-1))
         for i, task in enumerate(self.tasks):
             project = task.project
-            project_name = project.detailed_name() if project is not None else "Deleted Project"
             archived_text = red("DELETED") if project is None else (red("ARCHIVED") if project.archived else "")
-            result.append(f'{task.mark.emoji()}' + paint(f'[{i:>{ln}}] {project_name} ', task.mark.colour) + archived_text)
+            task_name = "Deleted Project" if project is None else f"{project.name} {paint(f"({project.cat.name})", Cat.COLOR)}"
+            result.append(f'{task.mark.emoji()}' + paint(f'[{i:>{ln}}] {task_name} ', task.mark.colour + s.BRIGHT) + archived_text + f" last done: {project and project.last_done and rainbow(str(date_to_datetime(project.last_done)))}")
             if project is None: continue
             mark_override = task.mark if task.mark == Mark.Done else None
             for j, step in enumerate(project.steps):
@@ -261,7 +330,7 @@ class DB:
     task_storage: str
 
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.cats = dict()
         self.cats_path = dict()
         self.steps = dict()
@@ -375,8 +444,8 @@ class DB:
         parts = path_str.split('.')
         i = 1
         while i <= len(parts):
-            path = parts[:i]
-            if tuple(path) not in self.cats_path:
+            part_path = parts[:i]
+            if tuple(part_path) not in self.cats_path:
                 break
             i += 1
 
@@ -393,7 +462,7 @@ class DB:
             path = tuple(parts[:cutoff])
             hash = git.commit_hash('.'.join(path))
             cat = Cat(hash, path[-1], parent)
-            print(f"Creating category {paint(cat.detailed_name(), Cat.COLOR)}")
+            print(f"{CREATING} category {cat.detailed_name()}")
             cat.sync()
             self._store_cat(cat)
             parent = hash
@@ -410,7 +479,7 @@ class DB:
         for project in cat.projects[:]:
             self.remove_project(project)
 
-        print("Removing category " + paint(cat.detailed_name(), Cat.COLOR))
+        print(f"{REMOVING} category " + cat.detailed_name())
         self._unstore_cat(cat)
         upd_categories = git.merge_pick(*Cat.get_list_merge(), False)
         git.switch_reset(rb.CATEGORIES, upd_categories)
@@ -422,7 +491,7 @@ class DB:
         for project in cat.projects:
             self.archive_project(project)
 
-        print("Archiving category " + paint(cat.detailed_name(), Cat.COLOR))
+        print(f"{ARCHIVING} category " + cat.detailed_name())
         cat.archived = True
         cat.sync()
 
@@ -433,41 +502,42 @@ class DB:
         for project in cat.projects:
             self.restore_project(project)
 
-        print("Restoring category " + paint(cat.detailed_name(), Cat.COLOR))
+        print(f"{RESTORING} category " + cat.detailed_name())
         cat.archived = False
         cat.sync()
 
-    def create_project(self, name: str, parent: Cat) -> Project | None:
+    def create_project(self, name: str, parent: Cat) -> tuple[Project, bool]:
         preexisting = self.projects_name.get(name)
         if preexisting is not None:
             for project in preexisting:
                 if project.cat == parent:
-                    return project
+                    return project, False
         
         commit_name = f"{name} <<< {parent.name}"
         git.switch_reset(rb.CRAWL, parent.hash)
         const_hash = git.commit_hash(f"[i] {commit_name}")
         mut_hash = git.commit_hash(f"[m] {commit_name}")
         project = Project(mut_hash, const_hash, name, parent, datetime.datetime.now().isoformat())
+        print(f"{CREATING} project " + project.detailed_name())
         project.sync()
         self._store_project(project)
         upd_projects = git.merge_pick(*Project.get_list_merge())
         git.switch_reset(rb.PROJECTS, upd_projects)
-        return None
+        return project, True
 
     def remove_project(self, project: Project) -> None:
-        print("Removing project " + paint(project.name, Project.COLOR))
+        print(f"{REMOVING} project " + project.detailed_name())
         self._unstore_project(project)
         upd_projects = git.merge_pick(*Project.get_list_merge(), False)
         git.switch_reset(rb.PROJECTS, upd_projects)
 
     def archive_project(self, project: Project) -> None:
-        print("Archiving project " + paint(project.name, Project.COLOR))
+        print(f"{ARCHIVING} project " + project.detailed_name())
         project.archived = True
         project.sync()
 
     def restore_project(self, project: Project) -> None:
-        print("Restoring project " + paint(project.name, Project.COLOR))
+        print(f"{RESTORING} project " + project.detailed_name())
         project.archived = False
         project.sync()
 
@@ -475,6 +545,7 @@ class DB:
         git.switch_reset(rb.CRAWL, parent.hash)
         hash = git.commit_hash(name)
         step = Step(hash, name)
+        print(f"{CREATING} step" + step.detailed_name())
         step.sync()
         self._store_step(step, parent)
         
@@ -486,7 +557,7 @@ class DB:
         git.switch_reset(rb.PROJECTS, upd_projects)
         
     def remove_step(self, step: Step, parent: Project) -> None:
-        print("Removing step " + paint(step.name, Step.COLOR) )
+        print(f"{REMOVING} step " + step.detailed_name() )
         self._unstore_step(step, parent)
 
         upd_project = git.merge_pick(*parent.get_merge(), False)
@@ -536,6 +607,7 @@ class DB:
             day = self.create_day(date)
         git.switch_reset(rb.TODAY, day.root)
         self.today = day
+        return None
 
     def assign_task(self, day: Day, project: Project) -> None:
         git.switch_reset(rb.CRAWL, day.root)
@@ -555,11 +627,20 @@ class DB:
         upd_days = git.merge_pick(*Day.get_list_merge(), False)
         git.switch_reset(rb.DAYS, upd_days)
         
-    def mark_task(self, task: Task, mark: Mark) -> None:
+    def mark_task(self, day: Day, task: Task, mark: Mark) -> None:
+        print(f"{MARKING} task {task.detailed_name()} as {paint(mark.name, mark.colour)}")
+        prev_mark = task.mark
         task.mark = mark
         task.sync()
+        project = task.project
+        if project is None: return
+        if mark == Mark.Done:
+            project.update_last_done(day.date)
+        elif mark == Mark.NotDone and prev_mark == Mark.Done:
+            project.fetch_last_done()
 
-    def mark_task_step(self, task: Task, step: Step, mark: Mark) -> None:
+    def mark_task_step(self, day: Day, task: Task, step: Step, mark: Mark) -> None:
+        print(f"{MARKING} step {step.detailed_name()} from task {task.detailed_name()} as {paint(mark.name, mark.colour)}")
         task.step_marks[step.hash] = mark
         task.sync()
 
@@ -597,7 +678,7 @@ class DB:
         
         
 
-    def precompute(self):
+    def precompute(self) -> None:
         branch_names = [
             'categories',
             'projects',
@@ -605,13 +686,13 @@ class DB:
             'today']
         hashes = git.show(branch_names, pretty="%H %P").split('\n\n')
         
-        cat_hashes, project_hashes, day_hashes, today = [x.split(' ') for x in hashes]
+        cat_hashes, project_hashes, day_hashes, today_list = [x.split(' ') for x in hashes]
 
         self.task_storage = cat_hashes[1]
         cat_hashes = cat_hashes[2:]
         project_hashes = project_hashes[2:]
         day_hashes = day_hashes[2:]
-        today = today[0]
+        today = today_list[0]
 
 
         self.actual_date = run.get_date()
@@ -625,17 +706,17 @@ class DB:
         cats = zip(cat_hashes, parent_names)
         
         for hash, parent_name in cats:
-            parent, name_json = parent_name
+            parent_hash, name_json = parent_name
             info = json.loads(name_json)
             archived = info.get('archived', False)
             name = info.get('name', Error)
-            cat = Cat(hash, name, parent, archived)
+            cat = Cat(hash, name, parent_hash, archived)
             self.cats[hash] = cat
 
         for cat in self.cats.values():
-            parent = cat.parent
-            if parent not in self.cats: continue
-            self.cats[parent].subcats.append(cat)
+            parent_hash = cat.parent
+            if parent_hash not in self.cats: continue
+            self.cats[parent_hash].subcats.append(cat)
 
         for cat in self.cats.values():
             path = [cat.name]
@@ -660,7 +741,7 @@ class DB:
         infos = git.notes_show_list(steps)
         for hash, name_json in zip(steps, infos):
             info = json.loads(name_json)
-            name: str = info.get('name') or Error
+            name = info.get('name') or Error
             step = Step(hash, name)
             self.steps[hash] = step
 
@@ -677,8 +758,8 @@ class DB:
             cat_name = info.get('category')
             archived = info.get('archived', False)
             cat = self.cats[cat_name]
-            steps = [self.steps[hash] for hash in steps]
-            project = Project(hash, root, name, cat, mtime, archived, steps)
+            project_steps = [self.steps[hash] for hash in steps]
+            project = Project(hash, root, name, cat, mtime, archived, project_steps)
             self.projects[project.hash] = project
             self.projects_root[project.root] = project
             if project.name not in self.projects_name:
@@ -689,10 +770,10 @@ class DB:
             
 
         # :Days:
-        day_tasks = [x.split(":") for x in git.show(day_hashes, pretty="%H:%s:%P").split('\n') if x != '']
+        day_tasks_str = [x.split(":") for x in git.show(day_hashes, pretty="%H:%s:%P").split('\n') if x != '']
 
         # :Tasks:
-        task_hashes = list(flatten([x[2].split(' ')[1:] for x in day_tasks]))
+        task_hashes = list(flatten([x[2].split(' ')[1:] for x in day_tasks_str]))
         tasks = [x.split('\n', 1) for x in git.show(task_hashes, pretty="%P%n%N").split('\n\n\n')]
         for hash, (parents, info_json) in zip(task_hashes, tasks):
             info = json.loads(info_json)
@@ -700,18 +781,22 @@ class DB:
             step_marks_str: dict[str, str] = info.get('step_marks') or dict()
             step_marks = {k: Mark[v] for k, v in step_marks_str.items()}
             project_hash = parents.split(' ')[1]
-            project = self.projects_root.get(project_hash)
-            task = Task(hash, project, mark, step_marks)
+            task_project = self.projects_root.get(project_hash)
+            task = Task(hash, task_project, mark, step_marks)
             self.tasks[hash] = task
 
         # :Days: again
 
-        for hash, subject, parents_str in day_tasks:
-            parents = parents_str.split(' ')
-            root = parents[0]
+        for hash, subject, parents_str in day_tasks_str:
+            day_parents = parents_str.split(' ')
+            root = day_parents[0]
             date = subject[4:]
-            tasks = [self.tasks[hash] for hash in parents[1:]]
-            day = Day(hash, root, date, tasks)
+            day_tasks = [self.tasks[hash] for hash in day_parents[1:]]
+            day = Day(hash, root, date, day_tasks)
+            for task in day_tasks:
+                task_project = task.project
+                if task.mark != Mark.Done or task_project is None: continue
+                task_project.update_last_done(date)
             self.days[date] = day
             if root == today:
                 self.today = day
