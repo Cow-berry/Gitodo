@@ -6,7 +6,8 @@ import os
 import sys
 import subprocess
 from typing import Optional, Callable
-            
+
+from pprint import pprint
 
 def maybe_lock_in() -> None:
     if sys.argv[1:3] == ['lock', 'in']:
@@ -14,8 +15,16 @@ def maybe_lock_in() -> None:
         subprocess.Popen(['emacs'])
         print("Locked In Successfully")
         exit(0)
-    
+
+def test_img() -> None:
+    print()
+    with open('/home/cowberry/Projects/Gitodo/img/mad.ppm', 'rb') as f:
+        lines = f.readlines()
+        parse_image(lines)
+
+        
 def main() -> None:
+    # test_img()
     maybe_lock_in()
     parser = api.setup_parser()
     

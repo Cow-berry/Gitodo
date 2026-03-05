@@ -1,8 +1,9 @@
 from db import Cat, Project, Step, Day, Mark, TaskType, TaskTypeList, paint, red, yellow, green
 from db import db, install
-from pretty import rainbow
+from pretty import rainbow, rainbowb
 
-
+import os
+import random
 import argparse
 from datetime import datetime
 from colorama import Fore as f
@@ -11,6 +12,27 @@ from colorama import Style as s
 from typing import Callable, ClassVar, LiteralString, override
 from enum import StrEnum
 from collections.abc import Sequence
+
+from run import IMAGE_DIRECTORY
+
+def parse_image(imgf: list[bytes]) -> list[str]:
+    w, h = [int(x) for x in imgf[1].decode('utf-8').split()]
+    maxcol = int(imgf[2].decode('utf-8'))
+    img =  (imgf[3]) #list(imgf[3])
+    for x in imgf[4:]:
+        img += x
+    img_str = ''
+    buffer: list[int] = []
+    for i, c in enumerate(img):
+        buffer.append(c)
+        if len(buffer) != 3: continue
+        r, g, b = buffer
+        buffer=[]
+        img_str += f"\x1b[48;2;{r};{g};{b}m \x1b[0m"
+        if (i // 3 + 1) % w == 0:
+            img_str += '\n'
+            
+    return img_str.split('\n')
 
 def add_fuzzy_option(parser: argparse.ArgumentParser, option: str, required: bool=True, dash_n: bool=False): # type: ignore
     group = parser.add_mutually_exclusive_group(required=required)
@@ -392,6 +414,10 @@ class MarkCommand(Command):
         
         task = day.tasks[task_id]
         project = task.project
+        if project is None:
+            error("The referred project was previously deleted.")
+            return
+            
         if step_id is not None:
             if project is None:
                 error(f"This project was permanently {red("deleted")}. Steps can't be picked.")
@@ -408,13 +434,27 @@ class MarkCommand(Command):
             if not silent: print(day.agenda())
             return
 
-        if mark != Mark.NotDone: UnfocusCommand.unfocus()
+        if mark == Mark.InProgress: UnfocusCommand.unfocus()
         db.mark_task(day, task, mark)
         if archive:
-            if project is None: warning("This project is already permanently deleted")
-            else: db.archive_project(project)
+            # if project is None: warning("This project is already permanently deleted.")
+            db.archive_project(project)
         if not silent: print(day.agenda())
+        if mark != Mark.Done: return
         
+        images = [img for img in os.listdir(IMAGE_DIRECTORY) if img.endswith('.ppm')]
+        if len(images) == 0:
+            error(f"There are no .ppm images in {IMAGE_DIRECTORY}.")
+            return
+        img_name = images[random.randint(0, len(images)-1)]
+        with open(IMAGE_DIRECTORY / img_name, 'rb') as f:
+            imgf = f.readlines()
+            img = parse_image(imgf)
+            congrats = [rainbow(' '.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
+            img[len(img)//3] += "   " + congrats[0]
+            img[len(img)//2] += "   " + congrats[1]
+            print('\n'.join(img))
+                
 
 
 class UnfocusCommand(Command):

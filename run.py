@@ -1,3 +1,4 @@
+from pathlib import Path
 from colorama import Fore as f
 from colorama import Style as s
 
@@ -8,9 +9,10 @@ from typing import TypeAlias
 RUN_CMD_DEBUG = False
 # RUN_CMD_DEBUG = True
 
-GITODO_DIRECTORY = '/home/cowberry/Projects/Gitodo/test/'
+GITODO_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/test/')
+IMAGE_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/img/')
 os.chdir(GITODO_DIRECTORY)
-INSTALLED = os.path.isdir(GITODO_DIRECTORY+".git")
+INSTALLED = os.path.isdir(GITODO_DIRECTORY / ".git")
 
 number_of_calls: int = 0
 

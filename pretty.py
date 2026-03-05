@@ -1,5 +1,6 @@
 from colorama import Fore as f
 from colorama import Style as s
+from colorama import Back as b
 import colorama
 import itertools
 
@@ -9,6 +10,9 @@ endl = f"{s.RESET_ALL}\n"
 
 def rgb(r: int, g: int, b: int) -> str:
     return f"\x1b[38;2;{r};{g};{b}m"
+
+def rgbb(r: int, g: int, b: int) -> str:
+    return f"\x1b[48;2;{r};{g};{b}m"
 
 def date(d: str) -> str:
     return f"{f.LIGHTMAGENTA_EX}{d}{s.RESET_ALL}"
@@ -25,7 +29,21 @@ def rainbow(string: str) -> str:
     ]
     rainbow = [x for c in rainbow for x in [c]*2]
 
-    return ''.join([f"{style}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
+    return ''.join([f"{style}{s.BRIGHT}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
+
+def rainbowb(string: str) -> str:
+    rainbow = [
+        b.LIGHTRED_EX,
+        rgbb(255,91,0),
+        b.LIGHTYELLOW_EX,
+        b.LIGHTGREEN_EX,
+        b.LIGHTCYAN_EX,
+        b.LIGHTBLUE_EX,
+        b.LIGHTMAGENTA_EX
+    ]
+    rainbow = [x for c in rainbow for x in [c]*2]
+
+    return ''.join([f"{style}{f.BLACK}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
 
 DONE = f"{rgb(0,255,0)} ✔ {s.RESET_ALL}"
 IN_PROGRESS = f"{rgb(0,0,255)} ● {s.RESET_ALL}"
