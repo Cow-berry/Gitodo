@@ -16,11 +16,11 @@ def maybe_lock_in() -> None:
         print("Locked In Successfully")
         exit(0)
 
-def test_img() -> None:
-    print()
-    with open('/home/cowberry/Projects/Gitodo/img/mad.ppm', 'rb') as f:
-        lines = f.readlines()
-        parse_image(lines)
+# def test_img() -> None:
+#     print()
+#     with open('/home/cowberry/Projects/Gitodo/img/mad.ppm', 'rb') as f:
+#         lines = f.readlines()
+#         parse_image(lines)
 
         
 def main() -> None:

@@ -1,5 +1,6 @@
 from db import Cat, Project, Step, Day, Mark, TaskType, TaskTypeList, paint, red, yellow, green
 from db import db, install
+from grats import pick_grats
 from pretty import rainbow, rainbowb
 
 import os
@@ -441,19 +442,21 @@ class MarkCommand(Command):
             db.archive_project(project)
         if not silent: print(day.agenda())
         if mark != Mark.Done: return
+
+        img = pick_grats()
         
-        images = [img for img in os.listdir(IMAGE_DIRECTORY) if img.endswith('.ppm')]
-        if len(images) == 0:
-            error(f"There are no .ppm images in {IMAGE_DIRECTORY}.")
-            return
-        img_name = images[random.randint(0, len(images)-1)]
-        with open(IMAGE_DIRECTORY / img_name, 'rb') as f:
-            imgf = f.readlines()
-            img = parse_image(imgf)
-            congrats = [rainbow(' '.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
-            img[len(img)//3] += "   " + congrats[0]
-            img[len(img)//2] += "   " + congrats[1]
-            print('\n'.join(img))
+        # images = [img for img in os.listdir(IMAGE_DIRECTORY) if img.endswith('.ppm')]
+        # if len(images) == 0:
+        #     error(f"There are no .ppm images in {IMAGE_DIRECTORY}.")
+        #     return
+        # img_name = images[random.randint(0, len(images)-1)]
+        # with open(IMAGE_DIRECTORY / img_name, 'rb') as f:
+        #     imgf = f.readlines()
+        #     img = parse_image(imgf)
+        congrats = [rainbow(' '.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
+        img[len(img)//3] += "   " + congrats[0]
+        img[len(img)//2] += "   " + congrats[1]
+        print('\n'.join(img))
                 
 
 

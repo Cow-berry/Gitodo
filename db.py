@@ -114,6 +114,7 @@ class Project:
 
     COLOR: ClassVar[str] = rgb(90, 205, 250)
 
+
     def update_last_done(self, date: str) -> None:
         if self.last_done is None: self.last_done = date
         self.last_done = max(self.last_done, date)
@@ -142,6 +143,9 @@ class Project:
         parents = [rb.TASK_STORAGE] + project_hashes
         message = 'All projects'
         return rb.PROJECTS, parents, message
+
+    # @property
+    # def delta_done(self, date: ):
 
     @property
     def commit_name(self) -> str:
@@ -271,15 +275,19 @@ class Day:
     def agenda(self) -> str:
         result: list[str] = []
         dots = ''.join([paint('●', task.mark.colour) for task in self.tasks])
+        task_count = len(self.tasks)
         done_count = sum([1 for task in self.tasks if task.mark == Mark.Done])
+        plus_one = paint("+1", f.LIGHTCYAN_EX) if self.active_task is not None else ""
+        if plus_one:
+            done_count += 1
+            task_count += 1
         if len(self.tasks) == 0:
             done_colour = rgb(255, 255, 255)
         else:
-            t = done_count/len(self.tasks)
+            t = done_count/task_count
             r = int(255*min(1, (1-t)*2))
             g = int(255*min(1, t*2))
             done_colour = rgb(r, g, 0)
-        plus_one = paint("+1", f.LIGHTCYAN_EX) if self.active_task is not None else ""
         result.append(rainbow(f'Agenda @ {self.date}') + dots + paint(f"[{done_count}{plus_one}{done_colour}/{len(self.tasks)}]", done_colour) + ":")
         if len(self.tasks) == 0:
             result.append(f'--- No tasks are added yet --- ')
