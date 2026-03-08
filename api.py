@@ -1,4 +1,4 @@
-from db import Cat, Project, Step, Day, Mark, TaskType, TaskTypeList, paint, red, yellow, green
+from db import Cat, Project, Step, Day, Mark, ProjectFTag, StepFTag, paint, red, yellow, green
 from db import db, install
 from grats import pick_grats
 from pretty import rainbow, rainbowb
@@ -303,6 +303,10 @@ class WakeUpCommand(Command):
             report(warning, Day, rd.AlreadyExists, rainbow(today_date))
         
         db.create_today(today_date)
+
+        for project in db.all_projects:
+            if ProjectFTag.WAKEUP in project.ftag:
+                db.assign_task(db.today, project)
 
         print(db.today.agenda())
 
@@ -646,6 +650,40 @@ class ReorderCommand(Command):
             
             
         
+class FtagCommand(Command):
+    command: list[str] = ['ftag']
+    help: str = "(Un)Set a function tag to a project"
+    
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
+        project = subcmds.add_parser('project', aliases=['p'])
+        add_fuzzy_option(project, 'name')
+        project.add_argument('--ftag-name', '-f',  type=str, dest='ftag_name', choices=[ftag_name.lower() for ftag_name in ProjectFTag._member_names_], required=True)
+        project.add_argument('--archived', '-a', dest='all', action='store_true')
+        project.add_argument('--unset', '-u', action='store_true')
+ 
+        step = subcmds.add_parser('step', aliases=['s'])
+        add_fuzzy_option(step, 'parent', dash_n=True)
+        step.add_argument('step_id', type=int)
+        step.add_argument('--ftag-name', '-f', type=str, dest='ftag_name', choices=[ftag_name.lower() for ftag_name in ProjectFTag._member_names_], required=True)
+        step.add_argument('--archived', '-a', dest='all', action='store_true')
+        step.add_argument('--unset', '-u', action='store_true')
+ 
+     
+    @classmethod
+    @override
+    def run(cls, args: argparse.Namespace) -> None:
+        if args.task_type.startswith('p'):
+            project = args_to_project(args, 'name', args.all)
+            if project is None: return
+            db.ftag_project(project, ProjectFTag[args.ftag_name.upper()], args.unset)
+        else:
+            step, project = args_to_step(args, 'parent', args.all)
+            if step is None or project is None: return
+            db.ftag_step(step, project, StepFTag[args.ftag_name.upper()], args.unset)
     
             
 class BrowseCommand(Command):
@@ -739,10 +777,18 @@ class ShowCommand(Command):
         day = subcmd.add_parser('day', aliases=['d'])
         day.add_argument('date', type=str)
 
+        ftag = subcmd.add_parser('ftag', aliases=['f'])
+        ftag.add_argument('name', type=str, choices=[x.lower() for x in ProjectFTag._member_names_])
+        ftag.add_argument('--archived', '-a', dest='all', action='store_true')
+        ftag.add_argument('--steps', '-s', dest='show_steps', action='store_true', default=False)
+
     @classmethod
     def show_project(cls, project: Project) -> None:
         print("Showing project", end = ' ')
-        print(f"{paint(project.detailed_name(), project.COLOR)}")
+        print(f"{paint(project.detailed_name(), project.COLOR)}:")
+        if len(project.steps) == 0:
+            print('--- no steps in this project ---')
+            return
         for i, step in enumerate(project.steps):
             print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
 
@@ -750,26 +796,26 @@ class ShowCommand(Command):
     def show_category(cls, cat: Cat, archived: bool=False, steps: bool=True, silent: bool=False) -> None:
         if not silent: print(f"Showing category {cat.detailed_name()}:")
         print(f"{paint(cat.detailed_path(), Cat.COLOR)}:")
-        for project in cat.projects:
+        cls.show_multiple_projects(cat.projects, archived, steps)
+
+        for subcat in cat.subcats:
+            cls.show_category(subcat, archived, steps, True)
+
+    @classmethod
+    def show_multiple_projects(cls, projects: list[Project], archived: bool= False, steps: bool=True) -> None:
+        for project in projects:
             if not archived and project.archived: continue
             print(f"{paint("一", Cat.COLOR)} {paint(project.name, project.COLOR)}")
             if not steps: continue
             for i, step in enumerate(project.steps):
                 print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
-
-        for subcat in cat.subcats:
-            cls.show_category(subcat, archived, steps, True)
             
     @override
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         if args.kind.startswith('p'):
-            name, fuzzy = process_fuzzy_option(args, 'name')
-            proj_list = db.all_projects if args.all else db.narch_projects
-            project, found = db.pick(proj_list, name, fuzzy)
-            if project is None:
-                if not found: report_fuzzy(error, Project, rd.NotFound, name, fuzzy)
-                return
+            project = args_to_project(args, 'name', args.all)
+            if project is None: return
             cls.show_project(project)
         elif args.kind.startswith('d'):
             date = db.call_date(args.date)
@@ -780,13 +826,17 @@ class ShowCommand(Command):
             print(day.agenda())
         elif args.kind.startswith('c'):
             show_steps: bool = args.show_steps
-            name, fuzzy = process_fuzzy_option(args, 'name')
-            cat_list = db.all_cats if args.all else db.narch_cats
-            cat, found = db.pick(cat_list, name, fuzzy)
-            if cat is None:
-                if not found: report_fuzzy(error, Cat, rd.NotFound, name, fuzzy)
-                return
+            cat = args_to_cat(args, 'name', args.all)
+            if cat is None: return
             cls.show_category(cat, args.all, show_steps, False)
+        elif args.kind.startswith('f'):
+            name: str = args.name
+            show_steps = args.show_steps
+            ftag = ProjectFTag[name.upper()]
+            proj_list = db.all_projects if args.all else db.narch_projects
+            projects = [proj for proj in proj_list if ftag in proj.ftag]
+            cls.show_multiple_projects(projects, args.all, show_steps)
+            
                 
             
 class InstallCommand(Command):

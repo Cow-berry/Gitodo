@@ -10,7 +10,7 @@ from itertools import chain, cycle
 from more_itertools import unzip, split_into, flatten, zip_offset
 from typing import Any, ClassVar
 from collections.abc import Sequence
-from enum import StrEnum, Enum
+from enum import Flag, StrEnum, Enum, auto
 from colorama import Fore as f
 from colorama import Style as s
 
@@ -84,23 +84,35 @@ REMOVING: str = red("Removing")
 ARCHIVING: str = yellow("Archiving")
 RESTORING: str = paint("Restoring", '\x1b[103m' + rgb(0,0,0))
 MARKING: str = "Marking"
+SETTING: str = "Setting"
+UNSETTING: str = "Unsetting"
+ASSIGNING: str = green("Assigning")
+UNASSIGNING: str = red("Unassigning")
 
+
+class StepFTag(Flag):
+    MUST = auto()
 
 @dataclass
 class Step:
     hash: str
     name: str
+    ftag: StepFTag = field(default=StepFTag(0))
 
-    # COLOR: ClassVar[str] = rgb(150, 195, 100)
     COLOR: ClassVar[str] = rgb(70, 165, 200)
 
     def sync(self) -> None:
-        note = generate_note(hash=self.hash, name=self.name)
+        note = generate_note(hash=self.hash, name=self.name, ftag=self.ftag.value)
         git.notes_add(self.hash, note)
 
     def detailed_name(self) -> str:
         return paint(self.name, self.COLOR)
 
+class ProjectFTag(Flag):
+    WAKEUP = auto()
+    AGO = auto()
+    BAD = auto()
+    
 @dataclass
 class Project:
     hash: str
@@ -111,6 +123,7 @@ class Project:
     archived: bool = field(default=False)
     steps: list[Step] = field(default_factory=lambda: [])
     last_done: str | None = field(default=None)
+    ftag: ProjectFTag = field(default=ProjectFTag(0))
 
     COLOR: ClassVar[str] = rgb(90, 205, 250)
 
@@ -128,7 +141,7 @@ class Project:
                 self.update_last_done(day.date)
 
     def sync(self) -> None:
-        note = generate_note(hash=self.hash, name=self.name, archived=self.archived, category=self.cat.hash)
+        note = generate_note(hash=self.hash, name=self.name, archived=self.archived, category=self.cat.hash, ftag=self.ftag.value)
         git.notes_add(self.root, note)
 
     def get_merge(self) -> tuple[str, list[str], str]:
@@ -143,9 +156,6 @@ class Project:
         parents = [rb.TASK_STORAGE] + project_hashes
         message = 'All projects'
         return rb.PROJECTS, parents, message
-
-    # @property
-    # def delta_done(self, date: ):
 
     @property
     def commit_name(self) -> str:
@@ -219,7 +229,9 @@ class Mark(StrEnum):
         match self:
             case Mark.NotDone:    return rgb(255, 50, 50)
             case Mark.InProgress: return rgb(0, 255, 255)
-            case Mark.Done:       return rgb(50, 255, 50)        
+            case Mark.Done:       return rgb(50, 255, 50)
+
+
 
         
 @dataclass
@@ -549,11 +561,19 @@ class DB:
         project.archived = False
         project.sync()
 
+    def ftag_project(self, project: Project, ftag: ProjectFTag, unset: bool = False) -> None:
+        print(f"{UNSETTING if unset else SETTING} ftag {ftag.name} to project " + project.detailed_name())
+        if unset:
+            project.ftag &= ~ftag
+        else:
+            project.ftag |= ftag
+        project.sync()
+
     def create_step(self, name: str, parent: Project) -> None:
         git.switch_reset(rb.CRAWL, parent.hash)
         hash = git.commit_hash(name)
         step = Step(hash, name)
-        print(f"{CREATING} step" + step.detailed_name())
+        print(f"{CREATING} step " + step.detailed_name())
         step.sync()
         self._store_step(step, parent)
         
@@ -587,6 +607,14 @@ class DB:
         upd_projects = git.merge_pick(*Project.get_list_merge(), False)
         git.switch_reset(rb.PROJECTS, upd_projects)
 
+    def ftag_step(self, step: Step, project: Project, ftag: StepFTag, unset: bool = False) -> None:
+        print(f"{UNSETTING if unset else SETTING} ftag {ftag.name} to step " + step.detailed_name() )
+        if unset:
+            step.ftag &= ~ftag
+        else:
+            step.ftag |= ftag
+        step.sync()
+
     def rename(self, name: str, task: Cat | Project | Step, parent: Project | None = None) -> None:
         step_text = f" from project {paint(parent.detailed_name(), Project.COLOR)}" if parent is not None else ""
         cls = task.__class__
@@ -618,6 +646,7 @@ class DB:
         return None
 
     def assign_task(self, day: Day, project: Project) -> None:
+        print(f"{ASSIGNING} {project.detailed_name()} to {rainbow(day.date)}")
         git.switch_reset(rb.CRAWL, day.root)
         task_hash = git.merge_pick(project.root, [day.root, project.root], f"@ {day.date} {project.name}")
         task = Task(task_hash, project)
@@ -629,6 +658,8 @@ class DB:
         git.switch_reset(rb.DAYS, upd_days)
 
     def unassign_task(self, day: Day, task: Task) -> None:
+        project_name = "Deleted Project" if task.project is None else task.project.detailed_name()
+        print(f"{UNASSIGNING} {project_name} from {rainbow(day.date)}")
         self._unstore_task(task, day)
         upd_day = git.merge_pick(*day.get_merge(), False)
         day.hash = upd_day
@@ -750,7 +781,8 @@ class DB:
         for hash, name_json in zip(steps, infos):
             info = json.loads(name_json)
             name = info.get('name') or Error
-            step = Step(hash, name)
+            ftag = info.get('ftag', 0)
+            step = Step(hash, name, StepFTag(ftag))
             self.steps[hash] = step
 
 
@@ -765,9 +797,10 @@ class DB:
             name = info.get('name') or Error
             cat_name = info.get('category')
             archived = info.get('archived', False)
+            ftag = info.get('ftag', 0)
             cat = self.cats[cat_name]
             project_steps = [self.steps[hash] for hash in steps]
-            project = Project(hash, root, name, cat, mtime, archived, project_steps)
+            project = Project(hash, root, name, cat, mtime, archived, project_steps, ftag=ProjectFTag(ftag))
             self.projects[project.hash] = project
             self.projects_root[project.root] = project
             if project.name not in self.projects_name:
