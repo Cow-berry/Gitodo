@@ -2,9 +2,9 @@ from pathlib import Path
 from colorama import Fore as f
 from colorama import Style as s
 
-import subprocess
 import os
-from typing import TypeAlias
+import tomllib
+import subprocess
 
 RUN_CMD_DEBUG = False
 # RUN_CMD_DEBUG = True
@@ -34,6 +34,8 @@ class RunException(Exception):
 def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedProcess[str]:
     global number_of_calls
     number_of_calls += 1
+    # if cmd[0] == 'git':
+        # cmd += ['-C', ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     proc.stdout = proc.stdout.strip()
     proc.stderr = proc.stderr.strip()
