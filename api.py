@@ -293,11 +293,16 @@ class RestoreCommand(Command):
         if task_type.startswith('p'):
             project = args_to_chosen(Project, db.arch_projects, [], args, 'name', True)
             if project is None: return
+            existing = db.projects_name[project.name]
+            if any([not p.archived for p in existing]):
+                error("Restoring is impossible. Project with this name already exists. Rename or archive it first.")
+                return
             db.restore_project(project)
             if not args.silent: ShowCommand.show_project(project)
         elif task_type.startswith('c'):
             cat = args_to_chosen(Cat, db.arch_cats, [], args, 'name', True)
             if cat is None: return
+            
             db.restore_cat(cat)
             if not args.silent: ShowCommand.show_category(cat)
         
@@ -527,6 +532,8 @@ class RenameCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         task_type: str = args.task_type
+        chosen: Cat | Project | Step | None
+        parent: Project | None
         if task_type.startswith('c'):
             chosen = args_to_cat(args, 'name', args.all)
             parent = None

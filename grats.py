@@ -64,11 +64,11 @@ def ppm_to_ansi2(imgf: list[bytes]) -> list[str]:
 
 
 def png_to_ansi(name: Path) -> list[str]:
-    pw, ph = get_png_size(name)
+    pw, ph = list(map(float, get_png_size(name)))
     ph *= 1 # aspect ratio of one symbol is 1:2.5, except it's halved bc of ▀ character
-    w, h = os.get_terminal_size()
-    w *= WIDTH * 2
-    h *= HEIGHT * 2
+    tw, th = os.get_terminal_size()
+    w = tw * WIDTH * 2
+    h = th * HEIGHT * 2
     if ph > h:
         pw *= h / ph
         ph = h

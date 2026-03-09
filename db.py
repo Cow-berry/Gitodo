@@ -904,7 +904,7 @@ class DB:
                 path.append(parent.name)
 
             path_t = tuple(path[::-1])
-            if path in self.cats_path:
+            if path_t in self.cats_path:
                 self.cats_path[path_t].append(cat)
             else:
                 self.cats_path[path_t] = [cat]
