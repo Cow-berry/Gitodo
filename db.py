@@ -94,6 +94,8 @@ ASSIGNING: str = green("Assigning")
 UNASSIGNING: str = red("Unassigning")
 DEBUGGING: str = paint("DEBUGGING", f.LIGHTMAGENTA_EX)
 
+ARCHIVED = " [archived]"
+
 def debug(**kwargs: Any) -> str:
     result: list[str] = []
     for key in kwargs:
@@ -237,10 +239,12 @@ class Project:
     def commit_name(self) -> str:
         return f"[m] {self.name} << {'.'.join(self.cat.path)}"
 
-    def detailed_name_str(self) -> str:
-        return f"{self.name} ({self.cat.detailed_path_str()})" + self.ftag.to_str() + self.last_done_str()
+    def detailed_name_str(self, cat: bool=True) -> str:
+        return f"{self.name} {"" if not cat else f"({self.cat.detailed_path_str()})"}" + self.ftag.to_str() + self.last_done_str()
 
     def detailed_name(self, cat: bool = True) -> str:
+        if self.archived: return red(self.detailed_name_str(cat) + ARCHIVED)
+        
         result = paint(self.name, self.COLOR)
         if cat:
             result += f" ({self.cat.detailed_path()})"
@@ -304,12 +308,14 @@ class Cat:
         return f"{self.name} ({' -> '.join(self.path)})"
 
     def detailed_name(self) -> str:
+        if self.archived: return red(self.detailed_name_str() + ARCHIVED)
         return paint(self.detailed_name_str(), self.COLOR)
 
     def detailed_path_str(self) -> str:
         return ' -> '.join(self.path)
 
     def detailed_path(self) -> str:
+        if self.archived: return red(self.detailed_name_str() + ARCHIVED)
         return paint(self.detailed_path_str(), self.COLOR)
 
 type TaskType = Cat | Project | Step

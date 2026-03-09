@@ -729,10 +729,14 @@ class BrowseCommand(Command):
         for project in projects:
             if project.cat != cat:
                 cat = project.cat
-                print(f"{paint(cat.detailed_path(), cat.COLOR)}:")
-            print(f"{paint("一", Cat.COLOR + s.DIM)} {project.detailed_name(cat=False)}")
+                print(f"{cat.detailed_path()}{red(':') if cat.archived else paint(':', Cat.COLOR)}")
+            print(f"{paint("一", Cat.COLOR + s.DIM if not project.archived else f.LIGHTRED_EX)} {project.detailed_name(cat=False)}")
             for i, step in enumerate(project.steps):
-                print(paint(f"{cls.TAB}{cls.TAB}{i}. {step.detailed_name_str()}", step.COLOR))
+                if not project.archived:
+                    print(paint(f"{cls.TAB}{cls.TAB}{i}. {step.detailed_name_str()}", step.COLOR))
+                else:
+                    print(red(f"{cls.TAB}{cls.TAB}{i}. {step.detailed_name_str()}"))
+                    
         
     @override
     @classmethod
