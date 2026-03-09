@@ -575,7 +575,7 @@ class DB:
         i = 1
         while i <= len(parts):
             part_path = parts[:i]
-            if tuple(part_path) not in self.cats_path:
+            if tuple(part_path) not in self.cats_path or self.cats_path[tuple(part_path)].archived:
                 break
             i += 1
 

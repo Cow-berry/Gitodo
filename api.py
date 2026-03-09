@@ -435,6 +435,9 @@ class MarkCommand(Command):
                 error(f"This project was permanently {red("deleted")}. Steps can't be picked.")
                 return
             step_count = len(project.steps)
+            if step_count == 0:
+                error(f"Project {project.detailed_name()} has {red('0')} step.")
+                return
             if step_id < 0 or step_id >= step_count:
                 report_out_of_bounds(step_id, step_count, 'step', 'Project ' + project.detailed_name_str())
                 return
