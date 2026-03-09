@@ -5,12 +5,21 @@ from colorama import Style as s
 import os
 import tomllib
 import subprocess
+from datetime import datetime, timedelta
 
 RUN_CMD_DEBUG = False
 # RUN_CMD_DEBUG = True
 
-GITODO_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/test/')
-IMAGE_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/img/')
+LINUX = os.name == "posix"
+WINDOWS = os.name == "nt"
+if LINUX:
+    GITODO_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/test/')
+    IMAGE_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/img/')
+elif WINDOWS:
+    GITODO_DIRECTORY = Path(r'C:\Users\Anatoly\Test\Gitodo\test')
+    IMAGE_DIRECTORY = Path(r'C:\Users\Anatoly\Test\Gitodo\img')
+    
+    
 SAD_IMAGE_DIRECTORY = IMAGE_DIRECTORY / 'sad'
 os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY / ".git")
@@ -57,8 +66,44 @@ def run_cmd_if(cmd: list[str], do_raise: bool = True) -> bool:
 def run_cmd_(cmd: str, do_raise: bool = True) -> str:
     return run_cmd(cmd.split(), do_raise)
 
-def get_date(date: str="today", do_raise: bool=True) -> str:
+def windows_date(date: str) -> datetime | None:
+    today = datetime.today()
+    match date:
+        case "today": return today
+        case "tomorrow": return today + timedelta(days=1)
+        case "yesterday": return today - timedelta(days=1)
+        case _: pass
+
+    date_split: list[str] = []
+    
+    for c in r"./\-":
+        if c in date:
+            date_split = date.split(c)
+            break
+    else:
+        return None
+    if len(date_split) != 3: return None
+    if not all(x.isdecimal() for x in date_split): return None
+    ymd = [int(x) for x in date_split]
+    if ymd[0] > 31:
+        y, m, d = ymd
+    else:
+        d, m, y = ymd
+    return datetime(year=y, month=m, day=d)
+
+def get_date(date_s: str="today", do_raise: bool=True) -> str:
+    if WINDOWS:
+        date = windows_date(date_s)
+        if date is None:
+            raise Exception(f"Invalid date: {date_s}")
+        return f"{date.day:02}.{date.month:02}.{date.year:04}"
     return run_cmd(['date', '--date', date, '+%x'], do_raise)
 
-def get_date_proc(date: str="today", do_raise: bool=True) -> subprocess.CompletedProcess[str]:
+def get_date_proc(date_s: str="today", do_raise: bool=True) -> subprocess.CompletedProcess[str]:
+    if WINDOWS:
+        date = windows_date(date_s)
+        if date is None:
+            return subprocess.CompletedProcess([], returncode=67, stdout="", stderr=f"Invalid date: {date_s}")
+        date_str = f"{date.day}.{date.month}.{date.year}"
+        return subprocess.CompletedProcess([], returncode=0, stdout=date_str, stderr="")
     return run_cmd_proc(['date', '--date', date, '+%x'], do_raise)

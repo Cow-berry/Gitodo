@@ -1,7 +1,7 @@
 from db import Cat, Project, Step, Day, Mark, ProjectFTag, StepFTag, paint, red, yellow, green
 from db import db, install
 from grats import pick_grats
-from pretty import rainbow, rainbowb
+from pretty import rainbow, rainbowb, rgbb, rgb
 
 import os
 import random
@@ -478,6 +478,7 @@ class MarkCommand(Command):
         congrats = [rainbow(''.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
         img[len(img)//2-1] += "   " + congrats[0]
         img[len(img)//2] += "   " + congrats[1]
+
         print('\n'.join(img))
                 
 
@@ -846,7 +847,7 @@ class ShowCommand(Command):
             date = db.call_date(args.date)
             day = db.days.get(date)
             if day is None:
-                print(f"There are no records about {date}")
+                print(f"There are {red('no')} records about {rainbow(date)}")
                 return
             print(day.agenda())
         elif args.kind.startswith('c'):

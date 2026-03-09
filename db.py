@@ -35,8 +35,8 @@ def install() -> None:
     git.switch(rb.DAYS_STORAGE)
     git.branch_switch(rb.TODAY, rb.DAYS_STORAGE)
     git.commit(f"[i] {run.get_date()}")
-    git.commit(f"[m] {run.get_date()}")
     git.branch_switch(rb.DAYS, rb.TODAY)
+    git.commit(f"[m] {run.get_date()}")
     git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, rb.TODAY], "All days")
 
     git.switch(rb.TASK_STORAGE)
@@ -472,8 +472,8 @@ class DB:
         self.projects_name = dict()
         self.tasks = dict()
         self.days = dict()
-        
-        self.precompute()
+        if run.INSTALLED:
+            self.precompute()
 
     # It's actually not costly to compute these every time now
         
@@ -864,16 +864,14 @@ class DB:
             'projects',
             'days',
             'today']
-        hashes = git.show(branch_names, pretty="%H %P").split('\n\n')
-        
-        cat_hashes, project_hashes, day_hashes, today_list = [x.split(' ') for x in hashes]
+        hashes = git.show(branch_names, pretty="%H %P").split('\n')
+        cat_hashes, project_hashes, day_hashes, today_list = [x.split(' ') for x in hashes if x != '']
 
         self.task_storage = cat_hashes[1]
         cat_hashes = cat_hashes[2:]
         project_hashes = project_hashes[2:]
         day_hashes = day_hashes[2:]
         today = today_list[0]
-
 
         self.actual_date = run.get_date()
 
@@ -972,7 +970,6 @@ class DB:
             self.tasks[hash] = task
 
         # :Days: again
-
         for hash, subject, parents_str in day_tasks_str:
             day_parents = parents_str.split(' ')
             root = day_parents[0]

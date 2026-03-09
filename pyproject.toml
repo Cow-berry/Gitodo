@@ -13,10 +13,8 @@ dependencies = [
     "types-colorama>=0.4.15.20250801",
 ]
 
-[tool.uv]
-dev-dependencies = [
-    "basedpyright>=1.38.0",
-]
+[dependency-groups]
+    dev = ["basedpyright>=1.38.0"]
 
 
 [tool.basedpyright]

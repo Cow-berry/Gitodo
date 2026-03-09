@@ -1,5 +1,5 @@
 from pretty import rgb, rgbb
-from run import IMAGE_DIRECTORY, SAD_IMAGE_DIRECTORY, run_cmd
+from run import IMAGE_DIRECTORY, SAD_IMAGE_DIRECTORY, run_cmd, LINUX
 
 
 import os
@@ -82,7 +82,8 @@ def png_to_ansi(name: Path) -> list[str]:
     inp = name.as_posix()
     result = name.with_name('0.ppm')
     out = result.as_posix()
-    run_cmd(['convert', inp, '-background', 'black', '-alpha', 'remove', '-define',  'filter:blur=0.5', '-resize', f'{int(pw)}x{int(ph)}!', out])
+    cmd = 'convert' if LINUX else 'magick'
+    run_cmd([cmd, inp, '-background', 'black', '-alpha', 'remove', '-define',  'filter:blur=0.5', '-resize', f'{int(pw)}x{int(ph)}!', out])
     with open(result, 'rb') as f:
         return ppm_to_ansi2(f.readlines())
 
