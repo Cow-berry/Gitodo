@@ -97,7 +97,7 @@ def get_date(date_s: str="today", do_raise: bool=True) -> str:
         if date is None:
             raise Exception(f"Invalid date: {date_s}")
         return f"{date.day:02}.{date.month:02}.{date.year:04}"
-    return run_cmd(['date', '--date', date, '+%x'], do_raise)
+    return run_cmd(['date', '--date', date_s, '+%x'], do_raise)
 
 def get_date_proc(date_s: str="today", do_raise: bool=True) -> subprocess.CompletedProcess[str]:
     if WINDOWS:
@@ -106,4 +106,4 @@ def get_date_proc(date_s: str="today", do_raise: bool=True) -> subprocess.Comple
             return subprocess.CompletedProcess([], returncode=67, stdout="", stderr=f"Invalid date: {date_s}")
         date_str = f"{date.day}.{date.month}.{date.year}"
         return subprocess.CompletedProcess([], returncode=0, stdout=date_str, stderr="")
-    return run_cmd_proc(['date', '--date', date, '+%x'], do_raise)
+    return run_cmd_proc(['date', '--date', date_s, '+%x'], do_raise)
