@@ -463,8 +463,9 @@ class MarkCommand(Command):
             db.archive_project(project)
         if not silent: print(day.agenda())
         if mark != Mark.Done: return
-
-        img = pick_grats()
+        
+        bad = ProjectFTag.BAD in project.ftag
+        img = pick_grats(bad)
 
         congrats = [rainbow(''.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
         img[len(img)//2-1] += "   " + congrats[0]

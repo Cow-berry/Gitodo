@@ -1,5 +1,5 @@
 from pretty import rgb, rgbb
-from run import IMAGE_DIRECTORY, run_cmd
+from run import IMAGE_DIRECTORY, SAD_IMAGE_DIRECTORY, run_cmd
 
 
 import os
@@ -87,8 +87,9 @@ def png_to_ansi(name: Path) -> list[str]:
         return ppm_to_ansi2(f.readlines())
 
 
-def pick_grats() -> list[str]:
-    pngs: list[str] = [img for img in os.listdir(IMAGE_DIRECTORY) if img.endswith('png')]
-    png_name = IMAGE_DIRECTORY / pngs[random.randint(0, len(pngs)-1)]
+def pick_grats(bad: bool) -> list[str]:
+    img_dir = SAD_IMAGE_DIRECTORY if bad else IMAGE_DIRECTORY
+    pngs: list[str] = [img for img in os.listdir(img_dir) if img.endswith('png')]
+    png_name = img_dir / pngs[random.randint(0, len(pngs)-1)]
     return png_to_ansi(png_name)
     

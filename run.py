@@ -11,6 +11,7 @@ RUN_CMD_DEBUG = False
 
 GITODO_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/test/')
 IMAGE_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/img/')
+SAD_IMAGE_DIRECTORY = IMAGE_DIRECTORY / 'sad'
 os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY / ".git")
 
