@@ -336,6 +336,7 @@ class AssignCommand(Command):
         add_fuzzy_option(parser, 'name')
         parser.add_argument('--silent', action='store_true')
         parser.add_argument('--schedule', '-d', type=str)
+        parser.add_argument('--insert', '-i', type=int)
 
     @override
     @classmethod
@@ -352,6 +353,16 @@ class AssignCommand(Command):
             day = db.create_day(date)
 
         db.assign_task(day, project)
+
+        insert: int = args.insert
+        task_count: int = len(day.tasks)
+        if insert < 0 or insert >= task_count:
+            report_out_of_bounds(insert, task_count, 'insert', "Day " + rainbow(day.date))
+            print(day.agenda())
+            return
+        
+        nums = list(range(insert)) + [task_count-1] + list(range(insert, task_count-1))
+        db.reorder_day(day, nums)
 
         if not args.silent:
             print(day.agenda())
