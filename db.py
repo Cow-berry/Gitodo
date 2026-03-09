@@ -447,7 +447,7 @@ rb = ReservedBranches
 # *ALLL* git calls will be always here
 # Everything on the levels above has to interface with this class for git (and date) calls
 class DB:
-    cats_path: dict[tuple[str, ...], Cat]
+    cats_path: dict[tuple[str, ...], list[Cat]]
     cats: dict[str, Cat]
     steps: dict[str, Step]
     projects: dict[str, Project]
@@ -504,14 +504,28 @@ class DB:
     def narch_cats(self) -> list[Cat]:
         return [cat for cat in self.all_cats if not cat.archived]
 
+    @property
+    def narch_cats_path(self) -> dict[tuple[str, ...], Cat]:
+        return {cat.path: cat for cat in self.all_cats if not cat.archived}
+
     def _store_cat(self, cat: Cat) -> None:
-        self.cats_path[cat.path] = cat
+        if cat.path not in self.cats_path:
+            self.cats_path[cat.path] = [cat]
+        else:
+            self.cats_path[cat.path].append(cat)
         self.cats[cat.hash] = cat
         if cat.parent in self.cats:
             self.cats[cat.parent].subcats.append(cat)
         
     def _unstore_cat(self, cat: Cat) -> None:
         self.cats_path.pop(cat.path)
+        name_list = self.cats_path.get(cat.path)
+        if name_list is not None and len(name_list) == 1:
+            self.cats_path.pop(cat.path)
+        elif name_list is not None:
+            self.cats_path[cat.path].remove(cat)
+        if cat.path in self.cats_path:
+            self.cats_path[cat.path].remove(cat)
         self.cats.pop(cat.hash)
         if cat.parent in self.cats:
             self.cats[cat.parent].subcats.remove(cat)
@@ -575,7 +589,7 @@ class DB:
         i = 1
         while i <= len(parts):
             part_path = parts[:i]
-            if tuple(part_path) not in self.cats_path or self.cats_path[tuple(part_path)].archived:
+            if tuple(part_path) not in self.cats_path or all([c.archived for c in self.cats_path[tuple(part_path)]]):
                 break
             i += 1
 
@@ -584,7 +598,7 @@ class DB:
         if i == 1:
             parent = rb.TASK_STORAGE
         else:
-            parent = self.cats_path[tuple(parts[:(i-1)])].hash        
+            parent = self.narch_cats_path[tuple(parts[:(i-1)])].hash        
         git.switch_reset(rb.CRAWL, parent)
 
         result = 0
@@ -888,8 +902,12 @@ class DB:
                 parent = self.cats[parent_hash]
                 parent_hash = parent.parent
                 path.append(parent.name)
-            
-            self.cats_path[tuple(path[::-1])] = cat
+
+            path_t = tuple(path[::-1])
+            if path in self.cats_path:
+                self.cats_path[path_t].append(cat)
+            else:
+                self.cats_path[path_t] = [cat]
             
         
         # :Projects:
