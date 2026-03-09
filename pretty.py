@@ -17,7 +17,7 @@ def rgbb(r: int, g: int, b: int) -> str:
 def date(d: str) -> str:
     return f"{f.LIGHTMAGENTA_EX}{d}{s.RESET_ALL}"
 
-def rainbow(string: str) -> str:
+def rainbow(string: str, mul: int = 2, add_style: str = '') -> str:
     rainbow = [
         f.LIGHTRED_EX,
         rgb(255,91,0),
@@ -27,9 +27,9 @@ def rainbow(string: str) -> str:
         f.LIGHTBLUE_EX,
         f.LIGHTMAGENTA_EX
     ]
-    rainbow = [x for c in rainbow for x in [c]*2]
+    rainbow = [x for c in rainbow for x in [c]*mul]
 
-    return ''.join([f"{style}{s.BRIGHT}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
+    return ''.join([f"{style}{s.BRIGHT}{add_style}{ch}{s.RESET_ALL}" for ch, style in zip(string, itertools.cycle(rainbow))])
 
 def rainbowb(string: str) -> str:
     rainbow = [

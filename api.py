@@ -436,7 +436,7 @@ class MarkCommand(Command):
                 return
             step_count = len(project.steps)
             if step_id < 0 or step_id >= step_count:
-                report_out_of_bounds(step_id, step_count, 'step', 'Project ' + paint(project.name, Project.COLOR))
+                report_out_of_bounds(step_id, step_count, 'step', 'Project ' + project.detailed_name_str())
                 return
             step = project.steps[step_id]
             if mark == Mark.InProgress: UnfocusCommand.unfocus()
@@ -446,6 +446,16 @@ class MarkCommand(Command):
             if not silent: print(day.agenda())
             return
 
+        if mark == Mark.Done:
+            must_steps = [s for s in project.steps if StepFTag.MUST in s.ftag and task.step_marks.get(s.hash, Mark.NotDone) != Mark.Done]
+            for must_step in must_steps:
+                print("Have you comepleted this step: " + must_step.detailed_name() + "[y/N]: ", end='')
+                answer = input()
+                if answer.lower() != 'y':
+                    print('Abort.')
+                    return
+                db.mark_task_step(day, task, must_step, mark)
+        
         if mark == Mark.InProgress: UnfocusCommand.unfocus()
         db.mark_task(day, task, mark)
         if archive:
@@ -457,8 +467,8 @@ class MarkCommand(Command):
         img = pick_grats()
 
         congrats = [rainbow(''.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
-        img[len(img)//3] += "   " + congrats[0]
-        img[len(img)//3*2] += "   " + congrats[1]
+        img[len(img)//2-1] += "   " + congrats[0]
+        img[len(img)//2] += "   " + congrats[1]
         print('\n'.join(img))
                 
 
@@ -536,40 +546,33 @@ class RenameCommand(Command):
 
 
 class ReorderCommand(Command):
-    command: list[str] = ["reorder"]
+    command: list[str] = ["reorder", 'ord']
     help: str = "reorder steps in a project"
 
     @override
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
-        add_fuzzy_option(parser, 'name')
-        parser.add_argument('--archived', '-a', dest='all', action='store_true')
-        
+        subcmds = parser.add_subparsers(dest='list_type', required=True)
+        project = subcmds.add_parser('project', aliases=['p'])
+        add_fuzzy_option(project, 'name')
+        project.add_argument('--archived', '-a', dest='all', action='store_true')
 
-    @override
+        day = subcmds.add_parser('day', aliases=['d'])
+        day.add_argument('schedule', default=None, type=str, nargs="?")
+
     @classmethod
-    def run(cls, args: argparse.Namespace) -> None:
-        project = args_to_project(args, 'name', arg.all)
-        if project is None: return
-        ShowCommand.show_project(project)
-        steps = project.steps
-        step_count = len(steps)
-        if step_count == 0:
-            warning("No steps. Nothing to reorder.")
-            return
-            
-        
-        print(f"Enter numbers 0 through {step_count-1} or q(uit):")
+    def input_sequence(cls, count: int) -> list[int] | None:
+        print(f"Enter numbers 0 through {count-1} or q(uit):")
         
         while True:
             inp = input().lower()
             if inp == 'q' or inp == 'quit':
                 print('Exiting.')
-                return
+                return None
             nums_str = inp.split()
             print('\x1b[1A\r', end='')
             nums: list[int] = []
-            not_mentioned = list(range(step_count))
+            not_mentioned = list(range(count))
             out_of_bounds: list[int] = []
             repeated: list[int] = []
             not_numbers: list[str] = []
@@ -582,7 +585,7 @@ class ReorderCommand(Command):
                     print(red(x), end=' ')
                     continue
                 n = int(x)
-                if n < 0 or n >= step_count:
+                if n < 0 or n >= count:
                     out_of_bounds.append(n)
                     print(red(x), end =' ')
                     continue
@@ -601,11 +604,60 @@ class ReorderCommand(Command):
             if repeated: print(f"Repeated: {red(' '.join(map(str, repeated)))}")
 
             if len(not_numbers + not_mentioned + out_of_bounds + repeated) == 0:
-                break
-            nums = []
+                return nums
+        
 
+    @classmethod
+    def handle_day(cls, args: argparse.Namespace) -> None:
+        day = db.today
+        if args.schedule:
+            date, error_ = db.call_date_maybe(args.schedule)
+            if date is None:
+                error(error_)
+                return
+            if date not in db.days:
+                error(f"Agenda for {date} doesn't yet exist")
+                return
+            day = db.days[date]
+
+        print(day.agenda())
+
+        tasks = day.tasks
+        task_count = len(tasks)
+        if task_count == 0:
+            warning("No tasks assigned. Nothing to reorder")
+            return
+
+        nums = cls.input_sequence(task_count)
+        if nums is None: return
+
+        db.reorder_day(day, nums)
+        print(day.agenda())
+
+    @classmethod
+    def handle_project(cls, args: argparse.Namespace) -> None:
+        project = args_to_project(args, 'name', args.all)
+        if project is None: return
+        ShowCommand.show_project(project)
+        steps = project.steps
+        step_count = len(steps)
+        if step_count == 0:
+            warning("No steps. Nothing to reorder.")
+            return
+            
+        nums = cls.input_sequence(step_count)
+        if nums is None: return
+    
         db.reorder_steps(project, nums)
         ShowCommand.show_project(project)
+            
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        if args.list_type.startswith('d'): cls.handle_day(args)
+        else: cls.handle_project(args)
+        
+
             
 class FtagCommand(Command):
     command: list[str] = ['ftag']
@@ -616,16 +668,17 @@ class FtagCommand(Command):
     @staticmethod
     def setup_parser(parser: argparse.ArgumentParser) -> None:
         subcmds = parser.add_subparsers(dest='task_type', required=True)
+        
         project = subcmds.add_parser('project', aliases=['p'])
+        project.add_argument('ftag_name',  type=str, choices=[ftag_name.lower() for ftag_name in ProjectFTag._member_names_])
         add_fuzzy_option(project, 'name')
-        project.add_argument('--ftag-name', '-f',  type=str, dest='ftag_name', choices=[ftag_name.lower() for ftag_name in ProjectFTag._member_names_], required=True)
         project.add_argument('--archived', '-a', dest='all', action='store_true')
         project.add_argument('--unset', '-u', action='store_true')
  
         step = subcmds.add_parser('step', aliases=['s'])
+        step.add_argument('ftag_name', type=str, choices=[ftag_name.lower() for ftag_name in StepFTag._member_names_])
         add_fuzzy_option(step, 'parent', dash_n=True)
         step.add_argument('step_id', type=int)
-        step.add_argument('--ftag-name', '-f', type=str, dest='ftag_name', choices=[ftag_name.lower() for ftag_name in ProjectFTag._member_names_], required=True)
         step.add_argument('--archived', '-a', dest='all', action='store_true')
         step.add_argument('--unset', '-u', action='store_true')
  
@@ -657,7 +710,7 @@ class BrowseCommand(Command):
         parser.add_argument('--project-name', '-p', dest='project_name', type=str, required=False)
 
     @classmethod
-    def show_multiple_projects(cls, projects: list[Project], reasons: str = "") -> None:
+    def show_multiple_projects_with_cats(cls, projects: list[Project], reasons: str = "") -> None:
         if len(projects) == 0:
             warning(f"No {paint("projects", Project.COLOR)} found" + reasons)
             return
@@ -666,9 +719,9 @@ class BrowseCommand(Command):
             if project.cat != cat:
                 cat = project.cat
                 print(f"{paint(cat.detailed_path(), cat.COLOR)}:")
-            print(f"{paint("一", Cat.COLOR + s.DIM)} {paint(project.name, project.COLOR)}")
+            print(f"{paint("一", Cat.COLOR + s.DIM)} {project.detailed_name(cat=False)}")
             for i, step in enumerate(project.steps):
-                print(paint(f"{cls.TAB}{cls.TAB}{i}. {step.name}", step.COLOR))
+                print(paint(f"{cls.TAB}{cls.TAB}{i}. {step.detailed_name_str()}", step.COLOR))
         
     @override
     @classmethod
@@ -676,7 +729,7 @@ class BrowseCommand(Command):
         projects = db.all_projects if args.all else db.narch_projects
 
         if args.cat_name is None and args.project_name is None:
-            cls.show_multiple_projects(projects)
+            cls.show_multiple_projects_with_cats(projects)
             return
 
         reasons: str = ""
@@ -687,7 +740,7 @@ class BrowseCommand(Command):
             projects = [p for p in projects if args.project_name in p.name]
             reasons += f' with {paint("names", Project.COLOR)} containing "{paint(args.project_name, Project.COLOR)}"'
 
-        cls.show_multiple_projects(projects, reasons)
+        cls.show_multiple_projects_with_cats(projects, reasons)
 
 
 
@@ -747,25 +800,25 @@ class ShowCommand(Command):
             print('--- no steps in this project ---')
             return
         for i, step in enumerate(project.steps):
-            print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
+            print(paint(f"{cls.TAB}{i}. {step.detailed_name_str()}", step.COLOR))
 
     @classmethod
     def show_category(cls, cat: Cat, archived: bool=False, steps: bool=True, silent: bool=False) -> None:
         if not silent: print(f"Showing category {cat.detailed_name()}:")
-        print(f"{paint(cat.detailed_path(), Cat.COLOR)}:")
-        cls.show_multiple_projects(cat.projects, archived, steps)
+        print(f"{cat.detailed_path()}:")
+        cls.show_multiple_projects(cat.projects, archived, steps, show_cat=False)
 
         for subcat in cat.subcats:
             cls.show_category(subcat, archived, steps, True)
 
     @classmethod
-    def show_multiple_projects(cls, projects: list[Project], archived: bool= False, steps: bool=True) -> None:
+    def show_multiple_projects(cls, projects: list[Project], archived: bool= False, steps: bool=True, show_cat: bool=True) -> None:
         for project in projects:
             if not archived and project.archived: continue
-            print(f"{paint("一", Cat.COLOR)} {paint(project.name, project.COLOR)}")
+            print(f"{paint("一", Cat.COLOR)} {project.detailed_name(show_cat)}")
             if not steps: continue
             for i, step in enumerate(project.steps):
-                print(paint(f"{cls.TAB}{i}. {step.name}", step.COLOR))
+                print(paint(f"{cls.TAB}{i}. {step.detailed_name_str()}", step.COLOR))
             
     @override
     @classmethod
@@ -804,6 +857,51 @@ class InstallCommand(Command):
     @classmethod
     def run(cls, args: argparse.Namespace) -> None:
         install()
+
+
+class DebugCommand(Command):
+    command: list[str] = ["debug"]
+    help: str = "Show all field of a chosen object"
+
+    @override
+    @staticmethod
+    def setup_parser(parser: argparse.ArgumentParser) -> None:
+        subcmds = parser.add_subparsers(dest='task_type', required=True)
+
+        category = subcmds.add_parser('category', aliases=['cat', 'c'])
+        add_fuzzy_option(category, 'name')
+        category.add_argument('--archived', '-a', dest='all', action='store_true')
+
+        project = subcmds.add_parser('project', aliases=['p'])
+        add_fuzzy_option(project, 'name')
+        project.add_argument('--archived', '-a', dest='all', action='store_true')
+        
+        step = subcmds.add_parser('step', aliases=['s'])
+        add_fuzzy_option(step, 'parent', dash_n=True)
+        step.add_argument('step_id', type=int)
+        step.add_argument('--archived', '-a', dest='all', action='store_true')
+
+    @override
+    @classmethod
+    def run(cls, args: argparse.Namespace) -> None:
+        task_type: str = args.task_type
+
+        if task_type.startswith('c'):
+            cat = args_to_cat(args, 'name', args.all)
+            if cat is None: return
+            print(cat.debug())
+        elif task_type.startswith('p'):
+            project = args_to_project(args, 'name', args.all)
+            if project is None: return
+            print(project.debug())
+        elif task_type.startswith('s'):
+            step, project = args_to_step(args, 'parent', args.all)
+            if step is None or project is None: return
+            print(project.debug())
+            print()
+            print(step.debug())
+
+    
  
         
                 

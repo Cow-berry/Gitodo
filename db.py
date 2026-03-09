@@ -57,7 +57,11 @@ def date_to_datetime(date: str) -> datetime.datetime:
             component = ""
     year, month, day = [int(x) for x in components]
     return datetime.datetime(year, month, day)
-            
+
+def percent_colour(t: float) -> str:
+    r = int(255*min(1, (1-t)*2))
+    g = int(255*min(1, t*2))
+    return rgb(r, g, 0)
 
 Error = "Error"
 
@@ -88,11 +92,31 @@ SETTING: str = "Setting"
 UNSETTING: str = "Unsetting"
 ASSIGNING: str = green("Assigning")
 UNASSIGNING: str = red("Unassigning")
+DEBUGGING: str = paint("DEBUGGING", f.LIGHTMAGENTA_EX)
+
+def debug(**kwargs: Any) -> str:
+    result: list[str] = []
+    for key in kwargs:
+        result.append(f"{paint(key, f.MAGENTA):<10} -> {kwargs[key]}")
+    return '\n'.join(result)
 
 
 class StepFTag(Flag):
     MUST = auto()
 
+
+    def to_str(self) -> str:
+        if self.name is None: return ''
+        result: list[str] = ['']
+        
+        for name in self.name.split('|'):
+            lname = name.lower()
+            match name:
+                case "MUST": result.append(red(f"#{lname}"))
+                case _: result.append(f"#{lname}")
+        return ' '.join(result)
+
+    
 @dataclass
 class Step:
     hash: str
@@ -105,13 +129,35 @@ class Step:
         note = generate_note(hash=self.hash, name=self.name, ftag=self.ftag.value)
         git.notes_add(self.hash, note)
 
+    def detailed_name_str(self) -> str:
+        return self.name + self.ftag.to_str()
+
     def detailed_name(self) -> str:
-        return paint(self.name, self.COLOR)
+        return paint(self.detailed_name_str(), self.COLOR)
+
+    def debug(self) -> str:
+        print(f'{DEBUGGING} {self.detailed_name()}')
+        return debug(hash=self.hash, name=self.name, ftag=self.ftag.to_str())
+        
 
 class ProjectFTag(Flag):
     WAKEUP = auto()
     AGO = auto()
     BAD = auto()
+
+    def to_str(self) -> str:
+        if self.name is None: return ''
+        result: list[str] = ['']
+        
+        for name in self.name.split('|'):
+            lname = name.lower()
+            match name:
+                case "WAKEUP": result.append(rainbow(f"#{''.join(lname)}", 1))
+                case "AGO": result.append(green(f"#{lname}"))
+                case "BAD": result.append(red(f"#{lname}"))
+                case _: result.append(f"#{lname}")
+        return ' '.join(result)
+            
     
 @dataclass
 class Project:
@@ -124,10 +170,23 @@ class Project:
     steps: list[Step] = field(default_factory=lambda: [])
     last_done: str | None = field(default=None)
     ftag: ProjectFTag = field(default=ProjectFTag(0))
+    done_once: bool = field(default=False)
 
     COLOR: ClassVar[str] = rgb(90, 205, 250)
 
-
+    def debug(self) -> str:
+        print(f'{DEBUGGING} {self.detailed_name()}')
+        return debug(hash=self.hash,
+                     root=self.root,
+                     name=self.name,
+                     cat=self.cat.detailed_name(),
+                     mtime=self.mtime,
+                     archived=self.archived,
+                     steps=', '.join([s.detailed_name() for s in self.steps]),
+                     last_done=self.last_done,
+                     ftag=self.ftag.to_str(),
+                     done_once=self.done_once)
+     
     def update_last_done(self, date: str) -> None:
         if self.last_done is None: self.last_done = date
         self.last_done = max(self.last_done, date)
@@ -140,6 +199,23 @@ class Project:
                 if task.mark != Mark.Done: continue
                 self.update_last_done(day.date)
 
+    def last_done_date(self) -> datetime.datetime | None:
+        if self.last_done is None: return None
+        return date_to_datetime(self.last_done)
+
+    def last_done_delta(self) -> int | None:
+        today_date = date_to_datetime(db.today.date)
+        last_done_date = self.last_done_date()
+        if last_done_date is None: return None
+        return (today_date - last_done_date).days
+
+    def last_done_str(self) -> str:
+        if ProjectFTag.AGO not in self.ftag: return ""
+        delta = self.last_done_delta()
+        if delta is None: return red(" UNDONE")
+        if delta == 0: return ""
+        return red(f" {delta} days ago")
+        
     def sync(self) -> None:
         note = generate_note(hash=self.hash, name=self.name, archived=self.archived, category=self.cat.hash, ftag=self.ftag.value)
         git.notes_add(self.root, note)
@@ -161,8 +237,19 @@ class Project:
     def commit_name(self) -> str:
         return f"[m] {self.name} << {'.'.join(self.cat.path)}"
 
-    def detailed_name(self) -> str:
-        return f"{paint(self.name, self.COLOR)} ({self.cat.detailed_path()})"
+    def detailed_name_str(self) -> str:
+        return f"{self.name} ({self.cat.detailed_path_str()})" + self.ftag.to_str() + self.last_done_str()
+
+    def detailed_name(self, cat: bool = True) -> str:
+        result = paint(self.name, self.COLOR)
+        if cat:
+            result += f" ({self.cat.detailed_path()})"
+        result += self.ftag.to_str()
+        result += self.last_done_str()
+
+        return result
+
+   
 
 @dataclass
 class Cat:
@@ -174,7 +261,16 @@ class Cat:
     projects: list[Project] = field(default_factory=lambda: [])
 
     COLOR: ClassVar[str] = rgb(245, 170, 185)
-
+    
+    def debug(self) -> str:
+        print(f'{DEBUGGING} {self.detailed_name()}')
+        return debug(hash=self.hash,
+                     name=self.name,
+                     parent=self.parent,
+                     archived=self.archived,
+                     subcats=', '.join([sc.detailed_name() for sc in self.subcats]),
+                     projects = ', '.join([p.detailed_name() for p in self.projects]))
+        
     def sync(self) -> None:
         note = generate_note(hash=self.hash, name=self.name.split('.')[-1], archived=self.archived)
         git.notes_add(self.hash, note)
@@ -204,11 +300,17 @@ class Cat:
             return False
         return all([ax == bx for ax, bx in zip(a, b)])
 
+    def detailed_name_str(self) -> str:
+        return f"{self.name} ({' -> '.join(self.path)})"
+
     def detailed_name(self) -> str:
-        return paint(f"{self.name} ({' -> '.join(self.path)})", self.COLOR)
+        return paint(self.detailed_name_str(), self.COLOR)
+
+    def detailed_path_str(self) -> str:
+        return ' -> '.join(self.path)
 
     def detailed_path(self) -> str:
-        return paint(' -> '.join(self.path), self.COLOR)
+        return paint(self.detailed_path_str(), self.COLOR)
 
 type TaskType = Cat | Project | Step
 type TaskTypeList = list[Cat] | list[Project]
@@ -289,6 +391,7 @@ class Day:
         dots = ''.join([paint('●', task.mark.colour) for task in self.tasks])
         task_count = len(self.tasks)
         done_count = sum([1 for task in self.tasks if task.mark == Mark.Done])
+        active = 1 if self.active_task is not None  else 0
         plus_one = paint("+1", f.LIGHTCYAN_EX) if self.active_task is not None else ""
         if plus_one:
             done_count += 1
@@ -296,10 +399,8 @@ class Day:
         if len(self.tasks) == 0:
             done_colour = rgb(255, 255, 255)
         else:
-            t = done_count/task_count
-            r = int(255*min(1, (1-t)*2))
-            g = int(255*min(1, t*2))
-            done_colour = rgb(r, g, 0)
+            done_colour = percent_colour((done_count + active)/(task_count + active))
+
         result.append(rainbow(f'Agenda @ {self.date}') + dots + paint(f"[{done_count}{plus_one}{done_colour}/{len(self.tasks)}]", done_colour) + ":")
         if len(self.tasks) == 0:
             result.append(f'--- No tasks are added yet --- ')
@@ -310,13 +411,22 @@ class Day:
         for i, task in enumerate(self.tasks):
             project = task.project
             archived_text = red("DELETED") if project is None else (red("ARCHIVED") if project.archived else "")
-            task_name = "Deleted Project" if project is None else f"{project.name} {paint(f"({project.cat.name})", Cat.COLOR)}"
-            result.append(f'{task.mark.emoji()}' + paint(f'[{i:>{ln}}] {task_name} ', task.mark.colour + s.BRIGHT) + archived_text + f" last done: {project and project.last_done and rainbow(str(date_to_datetime(project.last_done)))}")
+            task_name = "Deleted Project" if project is None else project.detailed_name_str() #f"{project.name} {paint(f"({project.cat.name})", Cat.COLOR)}"
+            percent = ""
+            if project is not None and len(project.steps) > 0:
+                steps = project.steps
+                ratio = len([s for s in steps if task.step_marks.get(s.hash) == Mark.Done]) / len(steps)
+                active_ratio = any([task.step_marks.get(s.hash) == Mark.InProgress for s in steps])
+                plus_one = "" if not active_ratio else f"+{100-int((len(steps)-1)*100/len(steps))}%"
+                if task.mark == Mark.Done:
+                    ratio = 1
+                percent = paint(f"[{int(ratio*100)}%{paint(plus_one, f.LIGHTCYAN_EX)}{percent_colour(ratio)}]", percent_colour(ratio))
+            result.append(f'{task.mark.emoji()}' + paint(f'[{i:>{ln}}] {task_name} {percent}', task.mark.colour + s.BRIGHT) + archived_text)
             if project is None: continue
             mark_override = task.mark if task.mark == Mark.Done else None
             for j, step in enumerate(project.steps):
                 mark = mark_override or task.step_marks.get(step.hash, Mark.NotDone)
-                result.append(self.TAB + paint(f"{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.name}", mark.colour))
+                result.append(self.TAB + paint(f"{s.DIM}{j}. {s.NORMAL}{s.BRIGHT}{step.detailed_name_str()}", mark.colour))
         return '\n'.join(result)
 
 class ReservedBranches:
@@ -530,7 +640,7 @@ class DB:
         preexisting = self.projects_name.get(name)
         if preexisting is not None:
             for project in preexisting:
-                if project.cat == parent:
+                if project.cat == parent and not project.archived:
                     return project, False
         
         commit_name = f"{name} <<< {parent.name}"
@@ -607,6 +717,7 @@ class DB:
         upd_projects = git.merge_pick(*Project.get_list_merge(), False)
         git.switch_reset(rb.PROJECTS, upd_projects)
 
+
     def ftag_step(self, step: Step, project: Project, ftag: StepFTag, unset: bool = False) -> None:
         print(f"{UNSETTING if unset else SETTING} ftag {ftag.name} to step " + step.detailed_name() )
         if unset:
@@ -644,6 +755,19 @@ class DB:
         git.switch_reset(rb.TODAY, day.root)
         self.today = day
         return None
+
+    def reorder_day(self, day: Day, nums: list[int]) -> None:
+        is_today = day == self.today
+        old_tasks = day.tasks
+        new_tasks = [old_tasks[i] for i in nums]
+        day.tasks = new_tasks
+
+        upd_day = git.merge_pick(*day.get_merge(), merge=False)
+        day.hash = upd_day
+        upd_days = git.merge_pick(*Day.get_list_merge(), False)
+        git.switch_reset(rb.DAYS, upd_days)
+        if is_today:
+            git.switch_reset(rb.TODAY, day.root)
 
     def assign_task(self, day: Day, project: Project) -> None:
         print(f"{ASSIGNING} {project.detailed_name()} to {rainbow(day.date)}")
@@ -841,6 +965,12 @@ class DB:
             self.days[date] = day
             if root == today:
                 self.today = day
+
+        for day in self.days.values():
+            for task in day.tasks:
+                if task.project is None: continue
+                if task.mark != Mark.Done: continue
+                task.project.done_once = True
 
         
 
