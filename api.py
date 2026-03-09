@@ -457,7 +457,7 @@ class MarkCommand(Command):
         if mark == Mark.Done:
             must_steps = [s for s in project.steps if StepFTag.MUST in s.ftag and task.step_marks.get(s.hash, Mark.NotDone) != Mark.Done]
             for must_step in must_steps:
-                print("Have you comepleted this step: " + must_step.detailed_name() + "[y/N]: ", end='')
+                print("Have you completed this step: " + must_step.detailed_name() + "[y/N]: ", end='')
                 answer = input()
                 if answer.lower() != 'y':
                     print('Abort.')

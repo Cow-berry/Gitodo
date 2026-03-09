@@ -87,9 +87,9 @@ CREATING: str = green("Creating")
 REMOVING: str = red("Removing")
 ARCHIVING: str = yellow("Archiving")
 RESTORING: str = paint("Restoring", '\x1b[103m' + rgb(0,0,0))
-MARKING: str = "Marking"
-SETTING: str = "Setting"
-UNSETTING: str = "Unsetting"
+MARKING: str = paint("Marking", f.LIGHTMAGENTA_EX)
+SETTING: str = paint("Setting", f.LIGHTMAGENTA_EX)
+UNSETTING: str = paint("Unsetting", f.LIGHTMAGENTA_EX)
 ASSIGNING: str = green("Assigning")
 UNASSIGNING: str = red("Unassigning")
 DEBUGGING: str = paint("DEBUGGING", f.LIGHTMAGENTA_EX)
@@ -114,7 +114,7 @@ class StepFTag(Flag):
         for name in self.name.split('|'):
             lname = name.lower()
             match name:
-                case "MUST": result.append(red(f"#{lname}"))
+                case "MUST": result.append(paint(f"#{lname}", f.WHITE + s.BRIGHT))
                 case _: result.append(f"#{lname}")
         return ' '.join(result)
 
@@ -318,9 +318,6 @@ class Cat:
         if self.archived: return red(self.detailed_name_str() + ARCHIVED)
         return paint(self.detailed_path_str(), self.COLOR)
 
-type TaskType = Cat | Project | Step
-type TaskTypeList = list[Cat] | list[Project]
-    
 class Mark(StrEnum):
     NotDone = 'NotDone'
     InProgress = 'InProgress'
