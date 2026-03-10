@@ -2,7 +2,7 @@ from db import Cat, Project, Step, Day, Mark, ProjectFTag, StepFTag, paint, red,
 from db import db, install
 from grats import pick_grats
 from pretty import rainbow, rainbowb, rgbb, rgb
-from run import INSTALLED
+from run import INSTALLED, IMAGE_DIRECTORY, SAD_IMAGE_DIRECTORY
 
 import os
 import random
@@ -14,8 +14,6 @@ from colorama import Style as s
 from typing import Callable, ClassVar, LiteralString, override
 from enum import StrEnum
 from collections.abc import Sequence
-
-from run import IMAGE_DIRECTORY
 
 def parse_image(imgf: list[bytes]) -> list[str]:
     w, h = [int(x) for x in imgf[1].decode('utf-8').split()]
@@ -487,6 +485,9 @@ class MarkCommand(Command):
         
         bad = ProjectFTag.BAD in project.ftag
         img = pick_grats(bad)
+        if img is None:
+            warning(f"`{SAD_IMAGE_DIRECTORY if bad else IMAGE_DIRECTORY}` doesn't have any pngs yet")
+            return
 
         congrats = [rainbow(''.join("CONGRATS ON COMPLETING:")), project.detailed_name()]
         img[len(img)//2-1] += "   " + congrats[0]

@@ -88,9 +88,11 @@ def png_to_ansi(name: Path) -> list[str]:
         return ppm_to_ansi2(f.readlines())
 
 
-def pick_grats(bad: bool) -> list[str]:
+def pick_grats(bad: bool) -> list[str] | None:
     img_dir = SAD_IMAGE_DIRECTORY if bad else IMAGE_DIRECTORY
     pngs: list[str] = [img for img in os.listdir(img_dir) if img.endswith('png')]
+    if len(pngs) == 0:
+        return None
     png_name = img_dir / pngs[random.randint(0, len(pngs)-1)]
     return png_to_ansi(png_name)
     
