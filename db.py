@@ -23,7 +23,6 @@ from colorama import Style as s
 # ~
 
 def install() -> None:
-    run.run_cmd(['rm', '-rf', '.git/'])
     run.run_cmd(["git",  "init"])
     git.commit("Initial commit")
     git.branch(rb.CRAWL, rb.MAIN)
