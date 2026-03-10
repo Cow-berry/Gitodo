@@ -355,15 +355,16 @@ class AssignCommand(Command):
 
         db.assign_task(day, project)
 
-        insert: int = args.insert
-        task_count: int = len(day.tasks)
-        if insert < 0 or insert >= task_count:
-            report_out_of_bounds(insert, task_count, 'insert', "Day " + rainbow(day.date))
-            print(day.agenda())
-            return
+        insert: int | None = args.insert
+        if insert is not None:
+            task_count: int = len(day.tasks)
+            if insert < 0 or insert >= task_count:
+                report_out_of_bounds(insert, task_count, 'insert', "Day " + rainbow(day.date))
+                print(day.agenda())
+                return
         
-        nums = list(range(insert)) + [task_count-1] + list(range(insert, task_count-1))
-        db.reorder_day(day, nums)
+            nums = list(range(insert)) + [task_count-1] + list(range(insert, task_count-1))
+            db.reorder_day(day, nums)
 
         if not args.silent:
             print(day.agenda())
