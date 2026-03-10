@@ -2,6 +2,7 @@ import git
 from pretty import rainbow
 import run
 
+import os
 import json
 import datetime
 from pprint import pprint
@@ -23,6 +24,7 @@ from colorama import Style as s
 # ~
 
 def install() -> None:
+    os.chdir(run.GITODO_DIRECTORY)
     run.run_cmd(["git",  "init"])
     git.commit("Initial commit")
     git.branch(rb.CRAWL, rb.MAIN)
@@ -35,8 +37,8 @@ def install() -> None:
     git.branch_switch(rb.TODAY, rb.DAYS_STORAGE)
     git.commit(f"[i] {run.get_date()}")
     git.branch_switch(rb.DAYS, rb.TODAY)
-    git.commit(f"[m] {run.get_date()}")
-    git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, rb.TODAY], "All days")
+    today_mut = git.commit_hash(f"[m] {run.get_date()}")
+    git.merge_pick(rb.DAYS, [rb.DAYS_STORAGE, today_mut], "All days")
 
     git.switch(rb.TASK_STORAGE)
     for name in [rb.CATEGORIES, rb.PROJECTS, rb.ARCHIVED_CATEGORIES, rb.ARCHIVED_PROJECTS]:

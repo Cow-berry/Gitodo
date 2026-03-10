@@ -2,6 +2,7 @@ from db import Cat, Project, Step, Day, Mark, ProjectFTag, StepFTag, paint, red,
 from db import db, install
 from grats import pick_grats
 from pretty import rainbow, rainbowb, rgbb, rgb
+from run import INSTALLED
 
 import os
 import random
@@ -877,7 +878,7 @@ class ShowCommand(Command):
                 
             
 class InstallCommand(Command):
-    command: list[str] = ['install', 'nuke']
+    command: list[str] = ['install']
     help: str = "Sets up the git environment"
 
     @override
@@ -937,6 +938,12 @@ def setup_parser() -> argparse.ArgumentParser:
     sub_parsers = parser.add_subparsers(dest='command', required=True)
     debug_parser = argparse.ArgumentParser(add_help=False)
     debug_parser.add_argument("--debug", action="store_true", help=argparse.SUPPRESS)
+
+    if not INSTALLED:
+        cls = InstallCommand
+        install_parser = sub_parsers.add_parser(cls.command[0], help=cls.help, aliases=cls.command[1:], parents=[debug_parser])
+        cls.setup_parser(install_parser)
+        return parser
 
     for cls in Command.__subclasses__():
         cls_parser = sub_parsers.add_parser(cls.command[0], help=cls.help, aliases=cls.command[1:], parents=[debug_parser])

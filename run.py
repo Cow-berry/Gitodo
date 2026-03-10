@@ -5,6 +5,7 @@ from colorama import Style as s
 import os
 import tomllib
 import subprocess
+from pprint import pprint
 from datetime import datetime, timedelta
 
 RUN_CMD_DEBUG = False
@@ -13,16 +14,23 @@ RUN_CMD_DEBUG = False
 LINUX = os.name == "posix"
 WINDOWS = os.name == "nt"
 if LINUX:
-    GITODO_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/test/')
-    IMAGE_DIRECTORY = Path('/home/cowberry/Projects/Gitodo/img/')
+    SETTINGS_PATH = Path.home() / ".config/gitodo/settings.toml"
+    settings = tomllib.load(open(SETTINGS_PATH, 'rb'))
+    folders: dict[str, str] = settings['folders']
+    # pprint(settings)
+    GITODO_DIRECTORY = Path(folders['repo'])
+    IMAGE_DIRECTORY = Path(folders['image'])
+    SAD_IMAGE_DIRECTORY = Path(folders['sad_image'])
 elif WINDOWS:
     GITODO_DIRECTORY = Path(r'C:\Users\Anatoly\Test\Gitodo\test')
     IMAGE_DIRECTORY = Path(r'C:\Users\Anatoly\Test\Gitodo\img')
+else:
+    raise Exception("Unsupported platform")
     
     
-SAD_IMAGE_DIRECTORY = IMAGE_DIRECTORY / 'sad'
-os.chdir(GITODO_DIRECTORY)
+# os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY / ".git")
+print(f"{INSTALLED = }")
 
 number_of_calls: int = 0
 
@@ -44,8 +52,8 @@ class RunException(Exception):
 def run_cmd_proc(cmd: list[str], do_raise: bool = True) -> subprocess.CompletedProcess[str]:
     global number_of_calls
     number_of_calls += 1
-    # if cmd[0] == 'git':
-        # cmd += ['-C', ]
+    if cmd[0] == 'git':
+        cmd = ['git', '-C', GITODO_DIRECTORY.as_posix()] + cmd[1:]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     proc.stdout = proc.stdout.strip()
     proc.stderr = proc.stderr.strip()
