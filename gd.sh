@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-source venv/bin/activate
-uv run main.py "$@"
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+uv run --directory $SCRIPT_DIR main.py "$@"
