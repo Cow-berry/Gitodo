@@ -15,22 +15,21 @@ LINUX = os.name == "posix"
 WINDOWS = os.name == "nt"
 if LINUX:
     SETTINGS_PATH = Path.home() / ".config/gitodo/settings.toml"
-    settings = tomllib.load(open(SETTINGS_PATH, 'rb'))
-    folders: dict[str, str] = settings['folders']
-    # pprint(settings)
-    GITODO_DIRECTORY = Path(folders['repo'])
-    IMAGE_DIRECTORY = Path(folders['image'])
-    SAD_IMAGE_DIRECTORY = Path(folders['sad_image'])
+    
 elif WINDOWS:
-    GITODO_DIRECTORY = Path(r'C:\Users\Anatoly\Test\Gitodo\test')
-    IMAGE_DIRECTORY = Path(r'C:\Users\Anatoly\Test\Gitodo\img')
+    SETTINGS_PATH = Path(os.getenv('APPDATA')) / "Gitodo/settings.toml"
 else:
     raise Exception("Unsupported platform")
-    
+
+settings = tomllib.load(open(SETTINGS_PATH, 'rb'))
+folders: dict[str, str] = settings['folders']
+# pprint(settings)
+GITODO_DIRECTORY = Path(folders['repo'])
+IMAGE_DIRECTORY = Path(folders['image'])
+SAD_IMAGE_DIRECTORY = Path(folders['sad_image'])
     
 # os.chdir(GITODO_DIRECTORY)
 INSTALLED = os.path.isdir(GITODO_DIRECTORY / ".git")
-print(f"{INSTALLED = }")
 
 number_of_calls: int = 0
 

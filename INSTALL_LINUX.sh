@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-settings="$HOME/.config/gitodo/settings.toml"
-touch settings
-echo "[folders]" > $settings
-
 data="$HOME/.gitodo"
 read -p "Folder to store app data [$data]:" input
 data=${input:-$data}
+
+settings="$HOME/.config/gitodo/settings.toml"
+mkdir "$HOME/.config/gitodo/"
+echo "[folders]" > $settings
+
 mkdir -p $data
 
 repo="$data/repo/"
@@ -20,7 +21,7 @@ image=${input:-$image}
 mkdir -p $image
 echo "image=\"$image\"" >> $settings
 
-sad_image="$data/sad_img"
+sad_image="$data/sad_image"
 read -p "Folder to store nefative images [$sad_image]:" input
 sad_image=${input:-$sad_image}
 mkdir -p $sad_image
