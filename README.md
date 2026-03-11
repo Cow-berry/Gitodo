@@ -64,6 +64,7 @@ to show today's (empty for now) agenda
 
 > Notice how `today` can be shortened to `t`,   most of the commands can be shortened to 1-3 letters this way. I'll be providing all the options in this document.
 
+#### Creating and Assigning
 There are 3 kinds of tasks:
 * Categories - used to organise projects
 * Projects - the main unit, the tasks themselves
@@ -138,6 +139,8 @@ Finally the main way you interact with projects is through assigning them to a d
 ```
 gd a bre
 ```
+
+#### Marking tasks off in a fun way
 You can see it immeditely showed the updated output of [`today`](#today-command) command as well.
 In the agenda you can see it's red, because it's marked as NotDone by deault. To change that we can use [`mark`](#mark-command) command
 
@@ -167,27 +170,29 @@ You should see that image along with a congratulatory text
 
 Now there's a useful feautre called ftag (function tag). It's assigned with the [`ftag`](#ftag-command) command
 ```
-gd ftag s must bre 2
+gd ftag s must bre 3
 gd m n 0
 gd m d 0
+[enter y in the prompt]
 ```
 
 We can tag the step 2 of project breakfast (the one about turning off the stove) as the `must` step.  
 And now if we mark the task as not done, and then attempt to mark it as done, it will prompt you to confirm that you've completed all the `must` steps.
 You can unset it with the same command and --unset (-u) flag
 ```
-gd ftag s must bre 2 -u
+gd ftag s must bre 3 -u
 ```
 
 For steps currently `must` is the only ftag.  
 For projects there are three:
 
 - `ago` makes it so you see how many days ago the specific task was completed last
-- `wakeup` adds the task to agenda every time you invoke `wakeup` command (basically making it a daily task)
 - `bad` switches the folder for congratulatory images to the sad_image one. Meant for negative things you do like aimlessly scrolling social media ^-^
+- `wakeup` adds the task to agenda every time you invoke [`wakeup`](#wakeup-command) command (basically making it a daily task)
 
-What is [`wakeup`](#wakeup-command) command? It's the only way to advance to the next day. When today's agenda doesn't correspond to the actual current date, you'll get a warning telling you to switch to the next day
+What is [`wakeup`](#wakeup-command) command? It's the only way to advance to the next day. When today's agenda doesn't correspond to the actual current date, you'll get a warning telling you to switch to the next day using this command
 
+#### Undoing and Fixing Mistakes
 In making all these tasks and assignments, you might make a mistake, or otherwise want to change things.
 
 If you want to change the wording of something you have [`rename`](#rename-command) command (a.k.a. `reword` a.k.a `mv`, pick your poison).
