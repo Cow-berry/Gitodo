@@ -8,7 +8,7 @@ import struct
 from pathlib import Path
 
 HEIGHT = 0.9
-WIDTH = 0.4
+WIDTH = 0.6
 
 
 def get_png_size(name: Path) -> tuple[int, int]:
