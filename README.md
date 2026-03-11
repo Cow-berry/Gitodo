@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 Gitodo README
 ===============
 
@@ -433,5 +431,3 @@ Shows a warning if it's already the case.
 ```
 gd wakeup
 ```
-
->>>>>>> 063566c (Update README)
