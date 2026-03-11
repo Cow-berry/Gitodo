@@ -198,7 +198,7 @@ In making all these tasks and assignments, you might make a mistake, or otherwis
 If you want to change the wording of something you have [`rename`](#rename-command) command (a.k.a. `reword` a.k.a `mv`, pick your poison).
 
 ```
-gd reword s bre oat
+gd reword s bre 0
 [enter cook eggs in the prompt]
 ```
 Check `gd b` and `gd t` to check that the name changed both in the global list and agenda.
@@ -212,14 +212,15 @@ would unassign the cooking task we used throughout this guide.
 Finally you can archived a task with [`remove`](#remove-command) and return it back with [`restore`](#restore-command) command.
 
 ```
-gd r p egg
-gd una p egg
+gd r p bre
+gd restore p bre
 ```
 
-Why [`remove`](#remove-command) command isn't called "archive"? Well, because it can also permanently remove a task if you specify --purge flag
+Why [`remove`](#remove-command) command isn't called "archive"? Well, because it can also permanently remove a task if you specify --purge flag (except steps are purged always)
 
 ```
-gd r p egg --purge
+gd r s bre 2
+gd r p bre --purge
 gd r c cho --purge
 ```
 
