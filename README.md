@@ -156,7 +156,7 @@ And this marks the task itself done
 gd m d 0
 ```
 
-At this point you should actually get a warning saying that there aren't any.png images in a specific folder. I recommend putting several .png images that bring you joy in there. If you need one for test, you can use [this one](https://hololive.hololivepro.com/wp-content/uploads/2020/07/Mori-Calliope_pr-img_03.png).  
+At this point you should actually get a warning saying that there aren't any .png images in a specific folder. I recommend putting several .png images that bring you joy in there. If you need one for test, you can use [this one](https://hololive.hololivepro.com/wp-content/uploads/2020/07/Mori-Calliope_pr-img_03.png).  
 Place the image in the folder.
 And then do the command again
 ```
