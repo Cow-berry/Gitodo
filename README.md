@@ -64,7 +64,7 @@ to show today's (empty for now) agenda
 
 > Notice how `today` can be shortened to `t`,   most of the commands can be shortened to 1-3 letters this way. I'll be providing all the options in this document.
 
-#### Creating and Assigning
+### # Creating and Assigning
 There are 3 kinds of tasks:
 * Categories - used to organise projects
 * Projects - the main unit, the tasks themselves
@@ -140,7 +140,7 @@ Finally the main way you interact with projects is through assigning them to a d
 gd a bre
 ```
 
-#### Marking tasks off in a fun way
+### # Marking tasks off in a fun way
 You can see it immeditely showed the updated output of [`today`](#today-command) command as well.
 In the agenda you can see it's red, because it's marked as NotDone by deault. To change that we can use [`mark`](#mark-command) command
 
@@ -192,7 +192,7 @@ For projects there are three:
 
 What is [`wakeup`](#wakeup-command) command? It's the only way to advance to the next day. When today's agenda doesn't correspond to the actual current date, you'll get a warning telling you to switch to the next day using this command
 
-#### Undoing and Fixing Mistakes
+### # Undoing and Fixing Mistakes
 In making all these tasks and assignments, you might make a mistake, or otherwise want to change things.
 
 If you want to change the wording of something you have [`rename`](#rename-command) command (a.k.a. `reword` a.k.a `mv`, pick your poison).
