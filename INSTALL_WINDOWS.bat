@@ -22,7 +22,8 @@ mkdir %sad_image%
 echo sad_image="%sad_image:\=\\%" >> %settings%
 
 echo %PATH% | findstr %~dp0\bin >NUL
-if "%errorlevel%" == "1" (setx PATH "%PATH%;%~dp0\bin")
+rem echo "%PATH%;%~dp0bin"
+if "%errorlevel%" == "1" (setx /M PATH "%PATH%;%~dp0bin")
 
 
 

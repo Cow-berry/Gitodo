@@ -328,7 +328,7 @@ class Mark(StrEnum):
         match self:
             case Mark.NotDone:    return paint(' ■ ', rgb(255,0,0))
             case Mark.InProgress: return paint(' ● ', rgb(0,0,255))
-            case Mark.Done:       return paint(' ✔ ', rgb(0,255,0))
+            case Mark.Done:       return paint(' ✔ ' if not run.WINDOWS else '√', rgb(0,255,0))
 
     @property
     def colour(self) -> str:
