@@ -395,6 +395,7 @@ class Day:
         dots = ''.join([paint('●', task.mark.colour) for task in self.tasks])
         task_count = len(self.tasks)
         done_count = sum([1 for task in self.tasks if task.mark == Mark.Done])
+        done_count_str = str(done_count)
         active = 1 if self.active_task is not None  else 0
         plus_one = paint("+1", f.LIGHTCYAN_EX) if self.active_task is not None else ""
         if plus_one:
@@ -405,7 +406,7 @@ class Day:
         else:
             done_colour = percent_colour((done_count + active)/(task_count + active))
 
-        result.append(rainbow(f'Agenda @ {self.date}') + dots + paint(f"[{done_count}{plus_one}{done_colour}/{len(self.tasks)}]", done_colour) + ":")
+        result.append(rainbow(f'Agenda @ {self.date}') + dots + paint(f"[{done_count_str}{plus_one}{done_colour}/{len(self.tasks)}]", done_colour) + ":")
         if len(self.tasks) == 0:
             result.append(f'--- No tasks are added yet --- ')
             return '\n'.join(result)
