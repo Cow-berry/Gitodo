@@ -124,9 +124,9 @@ gd c s bre "make a snack"
 gd ord p bre
 [enter 0 2 1 in the prompt]
 
-gd c s bre "make a snack" -i 1
+gd c s bre "make another snack" -i 2
 ```
-> Notice how all the counts start with 0. At this moment we have three steps, numbered 0, 1 and 2
+> Notice how all the counts start with 0. At this moment we have four steps, numbered 0, 1, 2 and 3
 
 Another way to view created tasks is with [`show`](#show-command) command
 ```
