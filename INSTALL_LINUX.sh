@@ -28,7 +28,7 @@ mkdir -p $sad_image
 echo "sad_image=\"$sad_image\"" >> $settings
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-ln -sf "$SCRIPT_DIR/gd.sh" ~/.local/bin/gd
+ln -sf "$SCRIPT_DIR/bin/gd.sh" ~/.local/bin/gd
 
 
 

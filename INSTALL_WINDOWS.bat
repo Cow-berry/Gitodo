@@ -21,8 +21,8 @@ set /p "sad_image=Folder to store negative images [%sad_image%]:"
 mkdir %sad_image%
 echo sad_image="%sad_image:\=\\%" >> %settings%
 
-echo %PATH% | findstr %data% >NUL
-if "%errorlevel%" == "1" (setx PATH "%PATH%;%~dp0")
+echo %PATH% | findstr %~dp0\bin >NUL
+if "%errorlevel%" == "1" (setx PATH "%PATH%;%~dp0\bin")
 
 
 
