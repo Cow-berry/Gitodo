@@ -2,5 +2,6 @@ test
 test/*
 *.pdf
 *.lock
-__pycache__/*
+*.pyc
+src/__pycache__/*
 
