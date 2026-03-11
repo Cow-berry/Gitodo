@@ -4,7 +4,7 @@ read -p "Folder to store app data [$data]:" input
 data=${input:-$data}
 
 settings="$HOME/.config/gitodo/settings.toml"
-mkdir "$HOME/.config/gitodo/"
+mkdir -p "$HOME/.config/gitodo/"
 echo "[folders]" > $settings
 
 mkdir -p $data
