@@ -19,6 +19,7 @@ Table of contents:
 Dependencies:
 * [Git](https://git-scm.com/install/windows)
 * [Image-magick](https://imagemagick.org/script/download.php)
+* [Uv](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_2)
 
 In command line:
 
@@ -39,6 +40,7 @@ cd Gitodo && INSTALL_WINDOWS.bat
 Dependencies:
 * git
 * image-magick (specifically `convert` command)
+* uv
 
 ```bash
 git clone https://github.com/Cow-berry/Gitodo
